@@ -532,8 +532,8 @@ const SECOES = [
     {id:'dg4', nome:'DG#4', tipo:'motor', horas:['250H','500H','2000H','5000H','8000H','20.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']}
   ]},
   {key:'redutoras', titulo:'Redutoras', itens:[
-    {id:'red_bb', nome:'Redutora BB', tipo:'simples', manut:['Filtro Óleo','Outras']},
-    {id:'red_be', nome:'Redutora BE', tipo:'simples', manut:['Filtro Óleo','Outras']}
+    {id:'red_bb', nome:'Redutora BB', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'red_be', nome:'Redutora BE', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true}
   ]},
   {key:'ge', titulo:'Gerador de eixo', itens:[
     {id:'ge_bb', nome:'Gerador de Eixo BB', tipo:'simples', manut:['Óleo D/E','Óleo ND/E','Outras']},
@@ -1238,6 +1238,15 @@ function nomesPecasFluig(idFluigStr){
   }).join(' · ');
 }
 
+function idFluigComNomes(idFluigStr){
+  const ids = (idFluigStr || '').split(',').map(s => s.trim()).filter(Boolean);
+  if(!ids.length) return '';
+  return ids.map(id => {
+    const nome = pecasFluigMap[id.toUpperCase()];
+    return nome ? `${id} (${nome})` : id;
+  }).join(', ');
+}
+
 function getUltimaLeitura(itId){
   const arr = leituras[itId] || [];
   if(!arr.length) return null;
@@ -1753,8 +1762,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       if(idFluigBusca && !(m.idFluig||'').toLowerCase().includes(idFluigBusca)) return;
       let statusTxt = '';
       if(m.tipo === 'Corretiva') statusTxt = m.corrigido ? ' — Corrigido' : ' — Não corrigido';
-      const nomePeca = m.idFluig ? nomesPecasFluig(m.idFluig) : '';
-      const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}${nomePeca ? ' ('+nomePeca+')' : ''}` : '';
+      const idTxt = m.idFluig ? ` | ID Fluig: ${idFluigComNomes(m.idFluig)}` : '';
       const pendente = m.tipo === 'Corretiva' && m.corrigido === false;
       registros.push({
         data:m.data, tipo:m.tipo, desc:`${nome}: ${m.descricao}${m.horimetro?' ('+m.horimetro+'h)':''}${statusTxt}${idTxt}`,
@@ -1818,8 +1826,7 @@ function renderPendenciasDiarioTab(){
     return;
   }
   c.innerHTML = itens.map(it => {
-    const nomePeca = it.m.idFluig ? nomesPecasFluig(it.m.idFluig) : '';
-    const idTxt = it.m.idFluig ? ` | ID Fluig: ${it.m.idFluig}${nomePeca ? ' ('+nomePeca+')' : ''}` : '';
+    const idTxt = it.m.idFluig ? ` | ID Fluig: ${idFluigComNomes(it.m.idFluig)}` : '';
     return `<div class="pend-item" style="cursor:default;">
       <div class="nome">${esc(it.nome)}</div>
       <div>${esc(it.m.descricao)}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${idTxt}</div>
