@@ -208,12 +208,15 @@
   .preview-actions .btn-ir-imprimir{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);}
   #preview-content{padding:24px;}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
 <div class="header">
   <h1><span class="dot"></span>Passagem de serviço</h1>
   <div class="sub">AHTS BRAM POWER — versão offline</div>
+  <div id="indicador-nuvem" style="font-family:var(--mono);font-size:10.5px;margin-top:4px;color:var(--text-faint);">Conectando...</div>
 </div>
 
 <div class="tabs">
@@ -433,6 +436,67 @@
     if(link) link.href = URL.createObjectURL(blob);
   }catch(e){}
 })();
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_bMAQrPBwBnSLMRTAuOvrxnZ8aKomrVc",
+  authDomain: "app-relatorio-fotografic-c8d7c.firebaseapp.com",
+  projectId: "app-relatorio-fotografic-c8d7c",
+  storageBucket: "app-relatorio-fotografic-c8d7c.firebasestorage.app",
+  messagingSenderId: "506734137526",
+  appId: "1:506734137526:web:caca376b0334c321519617"
+};
+let dbFirestore = null, firebaseDisponivel = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  dbFirestore = firebase.firestore();
+  firebaseDisponivel = true;
+}catch(e){ console.error('Erro ao iniciar Firebase:', e); firebaseDisponivel = false; }
+
+function nuvemRef(){ return dbFirestore.collection('passagem_ahts').doc('dados'); }
+
+async function salvarNuvem(){
+  if(!firebaseDisponivel) return false;
+  try{
+    await nuvemRef().set({
+      entries, leituras, leiturasFuel, leiturasOleo, manutencoesDiarias, servicosDiarios,
+      atualizadoEm: new Date().toISOString()
+    });
+    atualizarIndicadorNuvem(true);
+    return true;
+  }catch(e){
+    console.error('Erro ao salvar na nuvem:', e);
+    atualizarIndicadorNuvem(false);
+    return false;
+  }
+}
+
+async function carregarNuvem(){
+  if(!firebaseDisponivel) return false;
+  try{
+    const snap = await nuvemRef().get();
+    if(!snap.exists) return false;
+    const dados = snap.data();
+    if(dados.entries) entries = dados.entries;
+    if(dados.leituras) leituras = dados.leituras;
+    if(dados.leiturasFuel) leiturasFuel = dados.leiturasFuel;
+    if(dados.leiturasOleo) leiturasOleo = dados.leiturasOleo;
+    if(dados.manutencoesDiarias) manutencoesDiarias = dados.manutencoesDiarias;
+    if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios;
+    atualizarIndicadorNuvem(true);
+    return true;
+  }catch(e){
+    console.error('Erro ao carregar da nuvem:', e);
+    atualizarIndicadorNuvem(false);
+    return false;
+  }
+}
+
+function atualizarIndicadorNuvem(ok){
+  const el = document.getElementById('indicador-nuvem');
+  if(!el) return;
+  el.textContent = ok ? '☁ Sincronizado' : '⚠ Sem conexão com a nuvem';
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
 
 const STATUS = [
   {key:'operacional', label:'Operacional'},
@@ -1199,7 +1263,7 @@ async function carregarLeiturasFuel(){
   }catch(e){ leiturasFuel = {}; }
 }
 async function salvarLeiturasFuel(){
-  try{ await localStorageSet('leituras_fuel_ahts', JSON.stringify(leiturasFuel)); return true; }
+  try{ await localStorageSet('leituras_fuel_ahts', JSON.stringify(leiturasFuel)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar leituras de fuel:', e); return false; }
 }
 
@@ -1210,7 +1274,7 @@ async function carregarManutencoesDiarias(){
   }catch(e){ manutencoesDiarias = {}; }
 }
 async function salvarManutencoesDiarias(){
-  try{ await localStorageSet('manutencoes_diarias_ahts', JSON.stringify(manutencoesDiarias)); return true; }
+  try{ await localStorageSet('manutencoes_diarias_ahts', JSON.stringify(manutencoesDiarias)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar manutenções diárias:', e); return false; }
 }
 async function carregarServicosDiarios(){
@@ -1220,7 +1284,7 @@ async function carregarServicosDiarios(){
   }catch(e){ servicosDiarios = []; }
 }
 async function salvarServicosDiarios(){
-  try{ await localStorageSet('servicos_diarios_ahts', JSON.stringify(servicosDiarios)); return true; }
+  try{ await localStorageSet('servicos_diarios_ahts', JSON.stringify(servicosDiarios)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar serviços diários:', e); return false; }
 }
 async function carregarLeiturasOleo(){
@@ -1230,7 +1294,7 @@ async function carregarLeiturasOleo(){
   }catch(e){ leiturasOleo = {}; }
 }
 async function salvarLeiturasOleo(){
-  try{ await localStorageSet('leituras_oleo_ahts', JSON.stringify(leiturasOleo)); return true; }
+  try{ await localStorageSet('leituras_oleo_ahts', JSON.stringify(leiturasOleo)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar leituras de óleo:', e); return false; }
 }
 
@@ -1425,7 +1489,7 @@ async function carregarLeituras(){
 }
 
 async function salvarLeituras(){
-  try{ await localStorageSet('leituras_ahts', JSON.stringify(leituras)); return true; }
+  try{ await localStorageSet('leituras_ahts', JSON.stringify(leituras)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar leituras de horímetro:', e); return false; }
 }
 
@@ -2192,11 +2256,13 @@ async function loadEntries(){
   await carregarManutencoesDiarias();
   await carregarServicosDiarios();
   await carregarLeiturasOleo();
+  await carregarNuvem();
   mergeReportsSync(PRELOADED_REPORTS);
   if(entries.length){
     recomputeFiltrosInfoAll();
     try{ await localStorageSet('passagens_ahts', JSON.stringify(entries)); }catch(e){}
   }
+  await salvarNuvem();
   SECOES.forEach(sec => sec.itens.forEach(it => {
     const info = getEstadoMaisRecente(it.id);
     if(!info) return;
@@ -2266,6 +2332,7 @@ document.getElementById('btn-salvar').addEventListener('click', async () => {
     }
     recomputeFiltrosInfoAll();
     await localStorageSet('passagens_ahts', JSON.stringify(entries));
+    salvarNuvem();
     showToast(idxExistente >= 0 ? 'Passagem atualizada' : 'Passagem de serviço salva');
     formDirty = false;
     document.querySelector('.tab[data-tab="historico"]').click();
@@ -2381,6 +2448,7 @@ function renderHistorico(){
       entries = entries.filter(x => x.id !== r.id);
       recomputeFiltrosInfoAll();
       await localStorageSet('passagens_ahts', JSON.stringify(entries));
+      salvarNuvem();
       motorCards.forEach(c => { if(c.updateFiltroFields) c.updateFiltroFields(); });
       renderRecorrentes();
       renderPendenciasAbertas();
@@ -2396,6 +2464,7 @@ async function importarRelatorios(novos){
   const adicionados = mergeReportsSync(novos);
   if(adicionados > 0) recomputeFiltrosInfoAll();
   await localStorageSet('passagens_ahts', JSON.stringify(entries));
+  salvarNuvem();
   motorCards.forEach(c => { if(c.updateFiltroFields) c.updateFiltroFields(); });
   renderRecorrentes();
   renderPendenciasAbertas();
