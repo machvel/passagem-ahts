@@ -348,7 +348,7 @@
 <div id="tab-historico" style="display:none;">
   <div class="panel">
     <div class="section-title" style="margin-bottom:8px;">Consultar registros do Diário</div>
-    <p class="empty-hint" style="padding:0 0 8px;">Busque por equipamento e/ou período — ou deixe tudo em branco e clique em Buscar pra ver o registro diário inteiro.</p>
+    <p class="empty-hint" style="padding:0 0 8px;">Mostra manutenções e serviços gerais (não leituras de horímetro/fuel/óleo, pra não poluir a tela). Busque por equipamento e/ou período, ou deixe em branco pra ver tudo.</p>
     <input type="text" id="h-consulta-equip" list="dl-equip" placeholder="Buscar equipamento (opcional)">
     <input type="text" id="h-consulta-idfluig" placeholder="Buscar por ID Fluig / peça (opcional)" style="margin-top:8px;">
     <div class="row2" style="margin-top:8px;">
@@ -1347,7 +1347,12 @@ function renderManutencaoDraft(){
 
     let corrigidoHtml = '';
     let idFluigHtml = '';
+    let statusEquipHtml = '';
     if(usaCorrigido){
+      statusEquipHtml = `<select class="sel-status-equip" style="flex:0 0 150px;">
+        <option value="operacional" ${item.statusEquip !== 'nao_operacional' ? 'selected' : ''}>Operacional</option>
+        <option value="nao_operacional" ${item.statusEquip === 'nao_operacional' ? 'selected' : ''}>Não operacional</option>
+      </select>`;
       corrigidoHtml = `<select class="sel-corrigido" style="flex:0 0 150px;">
         <option value="nao" ${item.corrigido !== true ? 'selected' : ''}>Não corrigido</option>
         <option value="sim" ${item.corrigido === true ? 'selected' : ''}>Corrigido</option>
@@ -1369,6 +1374,7 @@ function renderManutencaoDraft(){
       </select>
       ${equipHtml}
       ${campoDetalheHtml}
+      ${statusEquipHtml}
       ${corrigidoHtml}
       ${idFluigHtml}
       ${horimetroHtml}
@@ -1399,6 +1405,7 @@ function renderManutencaoDraft(){
     }
     if(usaCorrigido){
       row.querySelector('.sel-corrigido').addEventListener('change', e => item.corrigido = e.target.value === 'sim');
+      row.querySelector('.sel-status-equip').addEventListener('change', e => item.statusEquip = e.target.value);
       const idfluigInput = row.querySelector('.inp-idfluig');
       const idfluigHint = row.querySelector('.idfluig-hint');
       function atualizarHintPeca(){
@@ -1417,7 +1424,7 @@ function renderManutencaoDraft(){
 }
 
 document.getElementById('add-manutencao-diaria').addEventListener('click', () => {
-  manutencaoRascunho.push({itemId: '', descricao: '', manutTipo: '', categoria: '', tipo: 'Preventiva', horimetro: '', corrigido: false, idFluig: ''});
+  manutencaoRascunho.push({itemId: '', descricao: '', manutTipo: '', categoria: '', tipo: 'Preventiva', horimetro: '', corrigido: false, idFluig: '', statusEquip: 'operacional'});
   renderManutencaoDraft();
 });
 
@@ -1456,19 +1463,28 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
     if(l){ equipState[it.id].horimetro = l.valor; preenchidos++; }
   });
 
+  SECOES.forEach(sec => sec.itens.forEach(it => {
+    equipState[it.id].status = 'operacional';
+  }));
+
   let manutAplicadas = 0;
   ALL_EQUIP_ITEMS.forEach(eq => {
     const diarias = getManutencoesDiariasNoPeriodo(eq.id, inicio, fim);
     if(!diarias.length) return;
-    const diariasPendentes = diarias.filter(m => m.tipo === 'Corretiva' && m.corrigido === false);
-    const diariasObs = diarias.filter(m => !(m.tipo === 'Corretiva' && m.corrigido === false));
+    const diariasPendentes = diarias.filter(m => m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional'));
+    const diariasObs = diarias.filter(m => !(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')));
     const st = equipState[eq.id];
+
+    if(diarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional')){
+      st.status = 'nao_operacional';
+    }
 
     if(diariasObs.length){
       const bloco = diariasObs.map(m => {
         const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
+        const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${idTxt}`;
+        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
       if(!st.obs.includes(bloco)){
         st.obs = st.obs.trim() ? st.obs.trim() + '\n' + bloco : bloco;
@@ -1692,7 +1708,8 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     const registroAtualizado = {
       id: item.editandoId || uid(), data, descricao: textoFinal, horimetro: item.horimetro.trim(), tipo: item.tipo,
       corrigido: item.tipo === 'Corretiva' ? (item.corrigido === true) : null,
-      idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : ''
+      idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : '',
+      statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null
     };
     if(item.editandoId){
       if(item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
@@ -1752,11 +1769,6 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
 
   idsAlvo.forEach(id => {
     const nome = EQUIP_ITEM_MAP[id].nome;
-    if(!idFluigBusca){
-      (leituras[id]||[]).forEach(l => { if(dentroPeriodo(l.data)) registros.push({data:l.data, tipo:'Horímetro', desc:`${nome}: ${l.valor}h`, ehLeitura:true}); });
-      (leiturasFuel[id]||[]).forEach(l => { if(dentroPeriodo(l.data)) registros.push({data:l.data, tipo:'Fuel', desc:`${nome}: ${l.valor}m³`, ehLeitura:true}); });
-      (leiturasOleo[id]||[]).forEach(l => { if(dentroPeriodo(l.data)) registros.push({data:l.data, tipo:'Óleo', desc:`${nome}: ${l.valor}L`, ehLeitura:true}); });
-    }
     (manutencoesDiarias[id]||[]).forEach(m => {
       if(!dentroPeriodo(m.data)) return;
       if(idFluigBusca && !(m.idFluig||'').toLowerCase().includes(idFluigBusca)) return;
@@ -1793,17 +1805,31 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
   </div>`).join('');
 });
 
-async function marcarComoCorrigido(equipId, recId){
+async function marcarComoCorrigido(equipId, recId, correcao){
   const arr = manutencoesDiarias[equipId] || [];
   const registro = arr.find(m => m.id === recId);
   if(!registro) return;
   registro.corrigido = true;
+  registro.correcao = (correcao || '').trim();
   await salvarManutencoesDiarias();
   showToast('Marcado como corrigido');
   renderPendenciasDiarioTab();
   if(document.getElementById('resultado-consulta').innerHTML.trim() !== ''){
     document.getElementById('btn-consultar-diario').click();
   }
+}
+
+function abrirFormCorrecao(btn){
+  const equipId = btn.dataset.equip;
+  const recId = btn.dataset.rec;
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'flex:1 1 100%;margin-top:8px;';
+  wrapper.innerHTML = `
+    <textarea class="obs-ta inp-correcao" placeholder="Descreva a correção realizada (opcional)" style="width:100%;margin-bottom:6px;"></textarea>
+    <button type="button" class="add-btn" data-confirmar-correcao data-equip="${escA(equipId)}" data-rec="${escA(recId)}" style="padding:6px 10px;font-size:11px;">Confirmar correção</button>
+  `;
+  btn.replaceWith(wrapper);
+  wrapper.querySelector('.inp-correcao').focus();
 }
 
 function renderPendenciasDiarioTab(){
@@ -1841,14 +1867,26 @@ function renderPendenciasDiarioTab(){
 
 document.getElementById('lista-pendencias-diario').addEventListener('click', async (e) => {
   const btnCorrigido = e.target.closest('[data-marcar-corrigido]');
-  if(btnCorrigido){ await marcarComoCorrigido(btnCorrigido.dataset.equip, btnCorrigido.dataset.rec); return; }
+  if(btnCorrigido){ abrirFormCorrecao(btnCorrigido); return; }
+  const btnConfirmar = e.target.closest('[data-confirmar-correcao]');
+  if(btnConfirmar){
+    const textarea = btnConfirmar.parentElement.querySelector('.inp-correcao');
+    await marcarComoCorrigido(btnConfirmar.dataset.equip, btnConfirmar.dataset.rec, textarea ? textarea.value : '');
+    return;
+  }
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar) editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec);
 });
 
 document.getElementById('resultado-consulta').addEventListener('click', async (e) => {
   const btnCorrigido = e.target.closest('[data-marcar-corrigido]');
-  if(btnCorrigido){ await marcarComoCorrigido(btnCorrigido.dataset.equip, btnCorrigido.dataset.rec); return; }
+  if(btnCorrigido){ abrirFormCorrecao(btnCorrigido); return; }
+  const btnConfirmar = e.target.closest('[data-confirmar-correcao]');
+  if(btnConfirmar){
+    const textarea = btnConfirmar.parentElement.querySelector('.inp-correcao');
+    await marcarComoCorrigido(btnConfirmar.dataset.equip, btnConfirmar.dataset.rec, textarea ? textarea.value : '');
+    return;
+  }
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
@@ -1876,6 +1914,7 @@ function editarManutencao(equipId, recId){
     horimetro: registro.horimetro || '',
     corrigido: registro.corrigido === true,
     idFluig: registro.idFluig || '',
+    statusEquip: registro.statusEquip || 'operacional',
     editandoId: registro.id,
     editandoEquipId: equipId
   });
@@ -1935,15 +1974,16 @@ function buildReport(){
   SECOES.forEach(sec => sec.itens.forEach(it => {
     const st = equipState[it.id];
     const diarias = getManutencoesDiariasNoPeriodo(it.id, header.inicio, header.fim);
-    const diariasPendentes = diarias.filter(m => m.tipo === 'Corretiva' && m.corrigido === false);
-    const diariasObs = diarias.filter(m => !(m.tipo === 'Corretiva' && m.corrigido === false));
+    const diariasPendentes = diarias.filter(m => m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional'));
+    const diariasObs = diarias.filter(m => !(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')));
 
     let obsFinal = st.obs.trim();
     if(diariasObs.length){
       const bloco = diariasObs.map(m => {
         const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
+        const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${idTxt}`;
+        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
       if(!obsFinal.includes(bloco)){
         obsFinal = obsFinal ? obsFinal + '\n' + bloco : bloco;
@@ -1959,8 +1999,10 @@ function buildReport(){
       });
     }
 
+    const statusFinal = diarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional') ? 'nao_operacional' : st.status;
+
     equip[it.id] = {
-      nome: it.nome, secao: sec.titulo, tipo: it.tipo, status: st.status,
+      nome: it.nome, secao: sec.titulo, tipo: it.tipo, status: statusFinal,
       atencao: st.atencao || diariasPendentes.length > 0, pendencias: pendenciasFinal,
       manut: Array.from(st.manut), manutList: st.manutList.map(m => ({...m})),
       horimetro: st.horimetro,
