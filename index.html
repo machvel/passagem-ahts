@@ -219,6 +219,8 @@
   <div id="indicador-nuvem" style="font-family:var(--mono);font-size:10.5px;margin-top:4px;color:var(--text-faint);">Conectando...</div>
 </div>
 
+<div id="alerta-vencimentos" style="display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;padding:10px 14px;margin:0 16px 12px;cursor:pointer;font-size:12.5px;color:#fff;"></div>
+
 <div class="tabs">
   <div class="tab active" data-tab="diario">Diário</div>
   <div class="tab" data-tab="pendencias" id="tab-btn-pendencias">Pendências</div>
@@ -265,6 +267,12 @@
     <div id="lista-estatisticas"></div>
     <div id="lista-estatisticas-fuel" style="margin-top:10px;"></div>
     <div id="lista-estatisticas-oleo" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="panel" style="margin-top:12px;">
+    <div class="section-title" style="margin-bottom:8px;">Próximas manutenções (por horas)</div>
+    <p class="empty-hint" style="padding:0 0 8px;">Pra começar a contar, registre a manutenção (com o horímetro em que foi feita) em "Registrar manutenção / serviço" acima — mesmo com data retroativa. Pra ver as outras manutenções por hora (2000H, 8000H, etc), busque o equipamento em Histórico → Consultar registros do Diário.</p>
+    <div id="lista-proximas-manutencoes"></div>
   </div>
 
   <div class="panel" style="margin-top:12px;border-color:var(--accent);">
@@ -540,8 +548,8 @@ const SECOES = [
     {id:'ge_be', nome:'Gerador de Eixo BE', tipo:'simples', manut:['Óleo D/E','Óleo ND/E','Outras']}
   ]},
   {key:'cpp', titulo:'CPP', itens:[
-    {id:'cpp_bb', nome:'CPP BB', tipo:'simples', manut:['Filtro Óleo','Outras']},
-    {id:'cpp_be', nome:'CPP BE', tipo:'simples', manut:['Filtro Óleo','Outras']}
+    {id:'cpp_bb', nome:'CPP BB', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'cpp_be', nome:'CPP BE', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true}
   ]},
   {key:'leme', titulo:'Máquina do leme', itens:[
     {id:'leme_bb', nome:'Máquina do Leme BB', tipo:'simples', manut:['Filtro Óleo','Outras']},
@@ -1538,6 +1546,16 @@ function renderDiario(){
       const oleoNaData = (leiturasOleo[it.id]||[]).find(l => l.data === dataAtual);
       html += `<div class="row" style="margin-top:5px;"><input type="text" data-oleo-id="${escA(it.id)}" value="${oleoNaData ? escA(oleoNaData.valor) : ''}" placeholder="${ultimaOleo ? escA(ultimaOleo.valor) : '—'}"><span class="unit">L</span></div>`;
     }
+    if(INTERVALO_FIXO[it.id]){
+      const tipoFixo = INTERVALO_FIXO[it.id];
+      const calc = horasRestantesManutencao(it.id, tipoFixo);
+      if(calc){
+        const vencida = calc.restante < 0;
+        const cor = vencida ? 'var(--red)' : (calc.restante < calc.intervalo * 0.3 ? 'var(--amber)' : 'var(--green)');
+        const texto = vencida ? `vencida há ${Math.abs(Math.round(calc.restante))}h` : `faltam ${Math.round(calc.restante)}h`;
+        html += `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:10px;color:${cor};">⏱ ${esc(tipoFixo)}: ${texto}</div>`;
+      }
+    }
     cell.innerHTML = html;
     c.appendChild(cell);
   });
@@ -1585,6 +1603,109 @@ function renderEstatisticasConsumo(containerId, itens, leiturasObj, unidade, lab
       <div style="font-family:var(--mono);font-size:12px;color:var(--text);">${soma.toFixed(casasDecimais)}${unidade} no período</div>`;
     c.appendChild(totalCell);
   }
+}
+
+function parseIntervaloHoras(tipoStr){
+  const numero = (tipoStr || '').replace(/[.\sH]/gi, '');
+  const n = parseInt(numero, 10);
+  return isNaN(n) ? null : n;
+}
+
+function horasRestantesManutencao(itemId, tipoManutencao){
+  const intervalo = parseIntervaloHoras(tipoManutencao);
+  if(!intervalo) return null;
+
+  const info = getEstadoMaisRecente(itemId);
+  const manutList = info ? (info.entry.manutList || []) : [];
+
+  const ultimaLeitura = getUltimaLeitura(itemId);
+  let horimetroAtual = ultimaLeitura ? parseFloat(ultimaLeitura.valor) : null;
+  if((horimetroAtual == null || isNaN(horimetroAtual)) && info){
+    horimetroAtual = parseFloat(info.entry.horimetro);
+  }
+  if(horimetroAtual == null || isNaN(horimetroAtual)) return null;
+
+  let ultimoHorimetroFeito = null;
+  manutList.forEach(m => {
+    if(m.tipo !== tipoManutencao) return;
+    const h = parseFloat(m.horimetro);
+    if(!isNaN(h) && (ultimoHorimetroFeito === null || h > ultimoHorimetroFeito)) ultimoHorimetroFeito = h;
+  });
+
+  (manutencoesDiarias[itemId] || []).forEach(m => {
+    if(m.tipo !== 'Preventiva' || m.descricao !== tipoManutencao) return;
+    const h = parseFloat(m.horimetro);
+    if(!isNaN(h) && (ultimoHorimetroFeito === null || h > ultimoHorimetroFeito)) ultimoHorimetroFeito = h;
+  });
+  if(ultimoHorimetroFeito === null) return null;
+
+  const proximoVencimento = ultimoHorimetroFeito + intervalo;
+  return { restante: proximoVencimento - horimetroAtual, proximoVencimento, horimetroAtual, intervalo };
+}
+
+const INTERVALO_FIXO = {
+  me1: '1000H', me2: '1000H', me3: '1000H', me4: '1000H',
+  dg1: '250H', dg4: '250H',
+  dg2: '600H', dg3: '600H'
+};
+
+function renderCardVencimento(nome, tipo, calc){
+  if(!calc){
+    return `<div class="lub-cell" style="border-color:var(--border);">
+      <label>${esc(nome)} · ${esc(tipo)}</label>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-faint);">Sem registro ainda</div>
+    </div>`;
+  }
+  const vencida = calc.restante < 0;
+  const cor = vencida ? 'var(--red)' : (calc.restante < calc.intervalo * 0.3 ? 'var(--amber)' : 'var(--green)');
+  const texto = vencida
+    ? `Vencida há ${Math.abs(Math.round(calc.restante))}h`
+    : `Faltam ${Math.round(calc.restante)}h`;
+  return `<div class="lub-cell" style="border-color:${cor};">
+    <label style="color:${cor};">${esc(nome)} · ${esc(tipo)}</label>
+    <div style="font-family:var(--mono);font-size:12.5px;font-weight:600;color:${cor};">${texto}</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px;">próx. em ${Math.round(calc.proximoVencimento)}h</div>
+  </div>`;
+}
+
+function renderProximasManutencoes(){
+  const c = document.getElementById('lista-proximas-manutencoes');
+  if(!c) return;
+  c.className = 'lub-grid';
+  const fixos = MOTORES_ITEMS.filter(it => INTERVALO_FIXO[it.id]).map(it => {
+    const tipo = INTERVALO_FIXO[it.id];
+    return { nome: it.nome, tipo, calc: horasRestantesManutencao(it.id, tipo) };
+  });
+  fixos.sort((a,b) => {
+    if(!a.calc) return 1;
+    if(!b.calc) return -1;
+    return a.calc.restante - b.calc.restante;
+  });
+  c.innerHTML = fixos.map(f => renderCardVencimento(f.nome, f.tipo, f.calc)).join('');
+  atualizarAlertaVencimentos();
+}
+
+function atualizarAlertaVencimentos(){
+  const alerta = document.getElementById('alerta-vencimentos');
+  if(!alerta) return;
+  const urgentes = [];
+  MOTORES_ITEMS.forEach(it => {
+    it.horas.forEach(tipo => {
+      if(tipo === INTERVALO_FIXO[it.id]) return;
+      const calc = horasRestantesManutencao(it.id, tipo);
+      if(calc && calc.restante < calc.intervalo * 0.3) urgentes.push({nome: it.nome, tipo, calc});
+    });
+  });
+  if(urgentes.length === 0){
+    alerta.style.display = 'none';
+    return;
+  }
+  const vencidas = urgentes.filter(u => u.calc.restante < 0).length;
+  const partes = [];
+  if(vencidas) partes.push(`${vencidas} vencida(s)`);
+  if(urgentes.length - vencidas) partes.push(`${urgentes.length - vencidas} perto de vencer`);
+  alerta.textContent = `⚠ ${partes.join(' e ')} — toque para ver`;
+  alerta.style.display = 'block';
 }
 
 function renderEstatisticas(){
@@ -1669,7 +1790,7 @@ document.getElementById('btn-salvar-diario').addEventListener('click', async () 
   }
 
   renderDiario();
-  renderEstatisticas();
+  renderEstatisticas(); renderProximasManutencoes();
   if(!okHorimetro || !okFuel || !okOleo){
     status.textContent = 'Erro ao salvar — os dados podem NÃO ter sido gravados. Veja o Console e tente novamente.';
     showToast('Erro ao salvar, tente de novo');
@@ -1744,6 +1865,9 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
 
 document.getElementById('h-diario-data').valueAsDate = new Date();
 document.getElementById('h-manutencao-data').valueAsDate = new Date();
+document.getElementById('alerta-vencimentos').addEventListener('click', () => {
+  document.querySelector('.tab[data-tab="diario"]').click();
+});
 
 document.getElementById('btn-consultar-diario').addEventListener('click', () => {
   const nomeBusca = document.getElementById('h-consulta-equip').value.trim();
@@ -1788,12 +1912,19 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
 
   registros.sort((a,b) => b.data.localeCompare(a.data));
 
+  let vencimentoHtml = '';
+  const equipCompleto = equipFiltro ? EQUIP_ITEM_MAP[equipFiltro.id] : null;
+  if(equipCompleto && equipCompleto.horas && equipCompleto.horas.length){
+    const cards = equipCompleto.horas.map(tipo => renderCardVencimento(equipCompleto.nome, tipo, horasRestantesManutencao(equipCompleto.id, tipo))).join('');
+    vencimentoHtml = `<div class="section-title" style="margin-bottom:6px;font-size:12px;">Vencimentos por horas</div><div class="lub-grid" style="margin-bottom:14px;">${cards}</div>`;
+  }
+
   if(registros.length === 0){
-    resultEl.innerHTML = '<p class="empty-hint">Nenhum registro encontrado com esses filtros.</p>';
+    resultEl.innerHTML = vencimentoHtml + '<p class="empty-hint">Nenhum registro encontrado com esses filtros.</p>';
     return;
   }
   const cabecalhoHtml = idFluigBusca ? `<p class="empty-hint" style="padding:0 0 8px;">${registros.length} ocorrência(s) encontrada(s) com essa peça.</p>` : '';
-  resultEl.innerHTML = cabecalhoHtml + registros.map(r => `<div class="pend-item" style="cursor:default;">
+  resultEl.innerHTML = vencimentoHtml + cabecalhoHtml + registros.map(r => `<div class="pend-item" style="cursor:default;">
     <div class="nome">${esc(r.tipo)}</div>
     <div>${esc(r.desc)}</div>
     <div class="meta">${fmtDate(r.data)}</div>
@@ -1934,7 +2065,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-pendencias').style.display = tab.dataset.tab === 'pendencias' ? 'block' : 'none';
     document.getElementById('tab-ferramentas').style.display = tab.dataset.tab === 'ferramentas' ? 'block' : 'none';
     if(tab.dataset.tab === 'historico') renderHistorico();
-    if(tab.dataset.tab === 'diario'){ renderDiario(); renderEstatisticas(); carregarPecasFluig(); }
+    if(tab.dataset.tab === 'diario'){ renderDiario(); renderEstatisticas(); renderProximasManutencoes(); carregarPecasFluig(); }
     if(tab.dataset.tab === 'pendencias') renderPendenciasDiarioTab();
   });
 });
@@ -2326,7 +2457,7 @@ async function loadEntries(){
   renderRecorrentes();
   renderPendenciasAbertas();
   renderDiario();
-  renderEstatisticas();
+  renderEstatisticas(); renderProximasManutencoes();
   renderPendenciasDiarioTab();
 }
 
@@ -2574,7 +2705,7 @@ document.getElementById('h-import-file').addEventListener('change', async (e) =>
     if(partes.length){
       showToast('Backup restaurado');
       renderDiario();
-      renderEstatisticas();
+      renderEstatisticas(); renderProximasManutencoes();
       renderPendenciasDiarioTab();
       if(adicionados > 0) document.querySelector('.tab[data-tab="historico"]').click();
     }
