@@ -269,12 +269,6 @@
     <div id="lista-estatisticas-oleo" style="margin-top:10px;"></div>
   </div>
 
-  <div class="panel" style="margin-top:12px;">
-    <div class="section-title" style="margin-bottom:8px;">Próximas manutenções (por horas)</div>
-    <p class="empty-hint" style="padding:0 0 8px;">Pra começar a contar, registre a manutenção (com o horímetro em que foi feita) em "Registrar manutenção / serviço" acima — mesmo com data retroativa. Pra ver as outras manutenções por hora (2000H, 8000H, etc), busque o equipamento em Histórico → Consultar registros do Diário.</p>
-    <div id="lista-proximas-manutencoes"></div>
-  </div>
-
   <div class="panel" style="margin-top:12px;border-color:var(--accent);">
     <div class="section-title" style="margin-bottom:8px;">Gerar passagem de serviço</div>
     <p class="empty-hint" style="padding:0 0 8px;">Escolha o período: o app preenche os horímetros dos motores com a última leitura registrada até o fim do período. As manutenções registradas no Diário dentro desse período já aparecem automaticamente nas observações de cada equipamento.</p>
@@ -1669,19 +1663,6 @@ function renderCardVencimento(nome, tipo, calc){
 }
 
 function renderProximasManutencoes(){
-  const c = document.getElementById('lista-proximas-manutencoes');
-  if(!c) return;
-  c.className = 'lub-grid';
-  const fixos = MOTORES_ITEMS.filter(it => INTERVALO_FIXO[it.id]).map(it => {
-    const tipo = INTERVALO_FIXO[it.id];
-    return { nome: it.nome, tipo, calc: horasRestantesManutencao(it.id, tipo) };
-  });
-  fixos.sort((a,b) => {
-    if(!a.calc) return 1;
-    if(!b.calc) return -1;
-    return a.calc.restante - b.calc.restante;
-  });
-  c.innerHTML = fixos.map(f => renderCardVencimento(f.nome, f.tipo, f.calc)).join('');
   atualizarAlertaVencimentos();
 }
 
