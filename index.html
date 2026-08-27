@@ -1321,6 +1321,7 @@ function renderManutencaoDraft(){
     const ehMotor = equipSelecionado && equipSelecionado.tipo === 'motor';
     const usaSeletorPreventivo = !ehServicoGeral && ehMotor && item.tipo === 'Preventiva';
     const usaCorrigido = item.tipo === 'Corretiva';
+    const usaCBM = item.tipo === 'CBM';
 
     let equipHtml = '';
     if(!ehServicoGeral){
@@ -1350,6 +1351,7 @@ function renderManutencaoDraft(){
     let corrigidoHtml = '';
     let idFluigHtml = '';
     let statusEquipHtml = '';
+    let resultadoCbmHtml = '';
     if(usaCorrigido){
       statusEquipHtml = `<select class="sel-status-equip" style="flex:0 0 150px;">
         <option value="operacional" ${item.statusEquip !== 'nao_operacional' ? 'selected' : ''}>Operacional</option>
@@ -1364,6 +1366,13 @@ function renderManutencaoDraft(){
         <div class="idfluig-hint" style="font-size:10px;color:var(--text-faint);margin-top:3px;"></div>
       </div>`;
     }
+    if(usaCBM){
+      resultadoCbmHtml = `<select class="sel-resultado-cbm" style="flex:0 0 150px;">
+        <option value="Normal" ${item.resultado !== 'Alerta' && item.resultado !== 'Crítico' ? 'selected' : ''}>Normal</option>
+        <option value="Alerta" ${item.resultado === 'Alerta' ? 'selected' : ''}>Alerta</option>
+        <option value="Crítico" ${item.resultado === 'Crítico' ? 'selected' : ''}>Crítico</option>
+      </select>`;
+    }
 
     const horimetroHtml = ehServicoGeral ? '' : `<input type="text" class="inp-horimetro" placeholder="Horímetro (opcional)" value="${escA(item.horimetro)}" style="flex:0 0 130px;">`;
 
@@ -1373,10 +1382,12 @@ function renderManutencaoDraft(){
         <option value="Preventiva" ${item.tipo==='Preventiva'?'selected':''}>Preventiva</option>
         <option value="Corretiva" ${item.tipo==='Corretiva'?'selected':''}>Corretiva</option>
         <option value="Serviço Geral" ${item.tipo==='Serviço Geral'?'selected':''}>Serviço Geral</option>
+        <option value="CBM" ${item.tipo==='CBM'?'selected':''}>CBM</option>
       </select>
       ${equipHtml}
       ${campoDetalheHtml}
       ${statusEquipHtml}
+      ${resultadoCbmHtml}
       ${corrigidoHtml}
       ${idFluigHtml}
       ${horimetroHtml}
@@ -1416,6 +1427,9 @@ function renderManutencaoDraft(){
       }
       idfluigInput.addEventListener('input', e => { item.idFluig = e.target.value; atualizarHintPeca(); });
       atualizarHintPeca();
+    }
+    if(usaCBM){
+      row.querySelector('.sel-resultado-cbm').addEventListener('change', e => item.resultado = e.target.value);
     }
     if(!ehServicoGeral){
       row.querySelector('.inp-horimetro').addEventListener('input', e => item.horimetro = e.target.value);
@@ -1473,8 +1487,8 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
   ALL_EQUIP_ITEMS.forEach(eq => {
     const diarias = getManutencoesDiariasNoPeriodo(eq.id, inicio, fim);
     if(!diarias.length) return;
-    const diariasPendentes = diarias.filter(m => m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional'));
-    const diariasObs = diarias.filter(m => !(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')));
+    const diariasPendentes = diarias.filter(manutencaoEhPendente);
+    const diariasObs = diarias.filter(m => !manutencaoEhPendente(m));
     const st = equipState[eq.id];
 
     if(diarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional')){
@@ -1485,8 +1499,9 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
       const bloco = diariasObs.map(m => {
         const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
         const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
+        const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${correcaoTxt}${idTxt}`;
+        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
       if(!st.obs.includes(bloco)){
         st.obs = st.obs.trim() ? st.obs.trim() + '\n' + bloco : bloco;
@@ -1597,6 +1612,12 @@ function renderEstatisticasConsumo(containerId, itens, leiturasObj, unidade, lab
       <div style="font-family:var(--mono);font-size:12px;color:var(--text);">${soma.toFixed(casasDecimais)}${unidade} no período</div>`;
     c.appendChild(totalCell);
   }
+}
+
+function manutencaoEhPendente(m){
+  if(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')) return true;
+  if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico')) return true;
+  return false;
 }
 
 function parseIntervaloHoras(tipoStr){
@@ -1811,7 +1832,8 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       id: item.editandoId || uid(), data, descricao: textoFinal, horimetro: item.horimetro.trim(), tipo: item.tipo,
       corrigido: item.tipo === 'Corretiva' ? (item.corrigido === true) : null,
       idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : '',
-      statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null
+      statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null,
+      resultado: item.tipo === 'CBM' ? (item.resultado || 'Normal') : null
     };
     if(item.editandoId){
       if(item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
@@ -1879,6 +1901,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       if(idFluigBusca && !(m.idFluig||'').toLowerCase().includes(idFluigBusca)) return;
       let statusTxt = '';
       if(m.tipo === 'Corretiva') statusTxt = m.corrigido ? ' — Corrigido' : ' — Não corrigido';
+      if(m.tipo === 'CBM' && m.resultado) statusTxt = ` — Resultado: ${m.resultado}`;
       const idTxt = m.idFluig ? ` | ID Fluig: ${idFluigComNomes(m.idFluig)}` : '';
       const pendente = m.tipo === 'Corretiva' && m.corrigido === false;
       registros.push({
@@ -1949,7 +1972,7 @@ function renderPendenciasDiarioTab(){
   const itens = [];
   ALL_EQUIP_ITEMS.forEach(eq => {
     (manutencoesDiarias[eq.id]||[]).forEach(m => {
-      if(m.tipo === 'Corretiva' && m.corrigido === false){
+      if(manutencaoEhPendente(m)){
         itens.push({equipId: eq.id, nome: eq.nome, m});
       }
     });
@@ -1965,12 +1988,14 @@ function renderPendenciasDiarioTab(){
   }
   c.innerHTML = itens.map(it => {
     const idTxt = it.m.idFluig ? ` | ID Fluig: ${idFluigComNomes(it.m.idFluig)}` : '';
+    const resultadoTxt = it.m.tipo === 'CBM' && it.m.resultado ? ` — Resultado: ${it.m.resultado}` : '';
+    const ehCorretivaPendente = it.m.tipo === 'Corretiva' && it.m.corrigido === false;
     return `<div class="pend-item" style="cursor:default;">
-      <div class="nome">${esc(it.nome)}</div>
-      <div>${esc(it.m.descricao)}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${idTxt}</div>
+      <div class="nome">${esc(it.nome)}${it.m.tipo === 'CBM' ? ' — CBM' : ''}</div>
+      <div>${esc(it.m.descricao)}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${resultadoTxt}${idTxt}</div>
       <div class="meta">Aberta em ${fmtDate(it.m.data)}</div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-        <button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>
+        ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
         <button type="button" class="add-btn" data-editar-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Editar</button>
       </div>
     </div>`;
@@ -2027,6 +2052,7 @@ function editarManutencao(equipId, recId){
     corrigido: registro.corrigido === true,
     idFluig: registro.idFluig || '',
     statusEquip: registro.statusEquip || 'operacional',
+    resultado: registro.resultado || 'Normal',
     editandoId: registro.id,
     editandoEquipId: equipId
   });
@@ -2086,16 +2112,17 @@ function buildReport(){
   SECOES.forEach(sec => sec.itens.forEach(it => {
     const st = equipState[it.id];
     const diarias = getManutencoesDiariasNoPeriodo(it.id, header.inicio, header.fim);
-    const diariasPendentes = diarias.filter(m => m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional'));
-    const diariasObs = diarias.filter(m => !(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')));
+    const diariasPendentes = diarias.filter(manutencaoEhPendente);
+    const diariasObs = diarias.filter(m => !manutencaoEhPendente(m));
 
     let obsFinal = st.obs.trim();
     if(diariasObs.length){
       const bloco = diariasObs.map(m => {
         const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
         const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
+        const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${correcaoTxt}${idTxt}`;
+        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
       if(!obsFinal.includes(bloco)){
         obsFinal = obsFinal ? obsFinal + '\n' + bloco : bloco;
