@@ -1499,7 +1499,8 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
       const bloco = diariasObs.map(m => {
         const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
         const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
-        const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}` : '';
+        const resolvidoTxt = (m.tipo === 'CBM' && m.resolvidoCbm) ? (m.resolvidoCbmObs ? ` (Resolvido: ${m.resolvidoCbmObs})` : ' (Resolvido)') : '';
+        const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}${resolvidoTxt}` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
         return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
@@ -1616,7 +1617,7 @@ function renderEstatisticasConsumo(containerId, itens, leiturasObj, unidade, lab
 
 function manutencaoEhPendente(m){
   if(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')) return true;
-  if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico')) return true;
+  if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico') && !m.resolvidoCbm) return true;
   return false;
 }
 
@@ -1904,9 +1905,10 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       if(m.tipo === 'CBM' && m.resultado) statusTxt = ` — Resultado: ${m.resultado}`;
       const idTxt = m.idFluig ? ` | ID Fluig: ${idFluigComNomes(m.idFluig)}` : '';
       const pendente = m.tipo === 'Corretiva' && m.corrigido === false;
+      const cbmPendente = manutencaoEhPendente(m) && m.tipo === 'CBM';
       registros.push({
         data:m.data, tipo:m.tipo, desc:`${nome}: ${m.descricao}${m.horimetro?' ('+m.horimetro+'h)':''}${statusTxt}${idTxt}`,
-        equipId: id, recId: m.id, mostrarMarcar: pendente, ehManutencao: true
+        equipId: id, recId: m.id, mostrarMarcar: pendente, mostrarResolverCbm: cbmPendente, ehManutencao: true
       });
     });
   });
@@ -1934,6 +1936,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
     <div class="meta">${fmtDate(r.data)}</div>
     ${r.ehManutencao ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       ${r.mostrarMarcar ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
+      ${r.mostrarResolverCbm ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
       <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
@@ -1967,6 +1970,33 @@ function abrirFormCorrecao(btn){
   wrapper.querySelector('.inp-correcao').focus();
 }
 
+async function marcarComoResolvidoCbm(equipId, recId, observacao){
+  const arr = manutencoesDiarias[equipId] || [];
+  const registro = arr.find(m => m.id === recId);
+  if(!registro) return;
+  registro.resolvidoCbm = true;
+  registro.resolvidoCbmObs = (observacao || '').trim();
+  await salvarManutencoesDiarias();
+  showToast('Pendência de CBM resolvida');
+  renderPendenciasDiarioTab();
+  if(document.getElementById('resultado-consulta').innerHTML.trim() !== ''){
+    document.getElementById('btn-consultar-diario').click();
+  }
+}
+
+function abrirFormResolucaoCbm(btn){
+  const equipId = btn.dataset.equip;
+  const recId = btn.dataset.rec;
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'flex:1 1 100%;margin-top:8px;';
+  wrapper.innerHTML = `
+    <textarea class="obs-ta inp-resolucao-cbm" placeholder="Descreva a nova amostra / resolução (opcional)" style="width:100%;margin-bottom:6px;"></textarea>
+    <button type="button" class="add-btn" data-confirmar-resolucao-cbm data-equip="${escA(equipId)}" data-rec="${escA(recId)}" style="padding:6px 10px;font-size:11px;">Confirmar resolução</button>
+  `;
+  btn.replaceWith(wrapper);
+  wrapper.querySelector('.inp-resolucao-cbm').focus();
+}
+
 function renderPendenciasDiarioTab(){
   const c = document.getElementById('lista-pendencias-diario');
   const itens = [];
@@ -1990,12 +2020,14 @@ function renderPendenciasDiarioTab(){
     const idTxt = it.m.idFluig ? ` | ID Fluig: ${idFluigComNomes(it.m.idFluig)}` : '';
     const resultadoTxt = it.m.tipo === 'CBM' && it.m.resultado ? ` — Resultado: ${it.m.resultado}` : '';
     const ehCorretivaPendente = it.m.tipo === 'Corretiva' && it.m.corrigido === false;
+    const ehCbmPendente = it.m.tipo === 'CBM';
     return `<div class="pend-item" style="cursor:default;">
       <div class="nome">${esc(it.nome)}${it.m.tipo === 'CBM' ? ' — CBM' : ''}</div>
       <div>${esc(it.m.descricao)}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${resultadoTxt}${idTxt}</div>
       <div class="meta">Aberta em ${fmtDate(it.m.data)}</div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
         ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
+        ${ehCbmPendente ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
         <button type="button" class="add-btn" data-editar-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Editar</button>
       </div>
     </div>`;
@@ -2011,6 +2043,14 @@ document.getElementById('lista-pendencias-diario').addEventListener('click', asy
     await marcarComoCorrigido(btnConfirmar.dataset.equip, btnConfirmar.dataset.rec, textarea ? textarea.value : '');
     return;
   }
+  const btnResolverCbm = e.target.closest('[data-marcar-resolvido-cbm]');
+  if(btnResolverCbm){ abrirFormResolucaoCbm(btnResolverCbm); return; }
+  const btnConfirmarCbm = e.target.closest('[data-confirmar-resolucao-cbm]');
+  if(btnConfirmarCbm){
+    const textarea = btnConfirmarCbm.parentElement.querySelector('.inp-resolucao-cbm');
+    await marcarComoResolvidoCbm(btnConfirmarCbm.dataset.equip, btnConfirmarCbm.dataset.rec, textarea ? textarea.value : '');
+    return;
+  }
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar) editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec);
 });
@@ -2022,6 +2062,14 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   if(btnConfirmar){
     const textarea = btnConfirmar.parentElement.querySelector('.inp-correcao');
     await marcarComoCorrigido(btnConfirmar.dataset.equip, btnConfirmar.dataset.rec, textarea ? textarea.value : '');
+    return;
+  }
+  const btnResolverCbm = e.target.closest('[data-marcar-resolvido-cbm]');
+  if(btnResolverCbm){ abrirFormResolucaoCbm(btnResolverCbm); return; }
+  const btnConfirmarCbm = e.target.closest('[data-confirmar-resolucao-cbm]');
+  if(btnConfirmarCbm){
+    const textarea = btnConfirmarCbm.parentElement.querySelector('.inp-resolucao-cbm');
+    await marcarComoResolvidoCbm(btnConfirmarCbm.dataset.equip, btnConfirmarCbm.dataset.rec, textarea ? textarea.value : '');
     return;
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
@@ -2120,7 +2168,8 @@ function buildReport(){
       const bloco = diariasObs.map(m => {
         const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
         const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
-        const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}` : '';
+        const resolvidoTxt = (m.tipo === 'CBM' && m.resolvidoCbm) ? (m.resolvidoCbmObs ? ` (Resolvido: ${m.resolvidoCbmObs})` : ' (Resolvido)') : '';
+        const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}${resolvidoTxt}` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
         return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
