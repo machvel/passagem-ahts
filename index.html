@@ -352,6 +352,16 @@
     <div class="section-title" style="margin-bottom:8px;">Consultar registros do Diário</div>
     <p class="empty-hint" style="padding:0 0 8px;">Mostra manutenções e serviços gerais (não leituras de horímetro/fuel/óleo, pra não poluir a tela). Busque por equipamento e/ou período, ou deixe em branco pra ver tudo.</p>
     <input type="text" id="h-consulta-equip" list="dl-equip" placeholder="Buscar equipamento (opcional)">
+    <div class="row2" style="margin-top:8px;">
+      <input type="text" id="h-consulta-palavra" placeholder="Buscar palavra na descrição (opcional)">
+      <select id="h-consulta-tipo">
+        <option value="">Todos os tipos</option>
+        <option value="Preventiva">Preventiva</option>
+        <option value="Corretiva">Corretiva</option>
+        <option value="CBM">CBM</option>
+        <option value="Serviço Geral">Serviço Geral</option>
+      </select>
+    </div>
     <input type="text" id="h-consulta-idfluig" placeholder="Buscar por ID Fluig / peça (opcional)" style="margin-top:8px;">
     <div class="row2" style="margin-top:8px;">
       <div class="field"><label>De</label><input type="date" id="h-consulta-inicio"></div>
@@ -1994,6 +2004,8 @@ document.getElementById('alerta-vencimentos').addEventListener('click', () => {
 
 document.getElementById('btn-consultar-diario').addEventListener('click', () => {
   const nomeBusca = document.getElementById('h-consulta-equip').value.trim();
+  const palavraBusca = document.getElementById('h-consulta-palavra').value.trim().toLowerCase();
+  const tipoBusca = document.getElementById('h-consulta-tipo').value;
   const idFluigBusca = document.getElementById('h-consulta-idfluig').value.trim().toLowerCase();
   const dataInicio = document.getElementById('h-consulta-inicio').value;
   const dataFim = document.getElementById('h-consulta-fim').value;
@@ -2019,6 +2031,8 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
     (manutencoesDiarias[id]||[]).forEach(m => {
       if(!dentroPeriodo(m.data)) return;
       if(idFluigBusca && !(m.idFluig||'').toLowerCase().includes(idFluigBusca)) return;
+      if(tipoBusca && m.tipo !== tipoBusca) return;
+      if(palavraBusca && !descricaoManut(m).toLowerCase().includes(palavraBusca)) return;
       let statusTxt = '';
       if(m.tipo === 'Corretiva') statusTxt = m.corrigido ? ' — Corrigido' : ' — Não corrigido';
       if(m.tipo === 'CBM' && m.resultado) statusTxt = ` — Resultado: ${m.resultado}`;
@@ -2031,8 +2045,12 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       });
     });
   });
-  if(!equipFiltro && !idFluigBusca){
-    servicosDiarios.forEach(s => { if(dentroPeriodo(s.data)) registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:s.texto}); });
+  if(!equipFiltro && !idFluigBusca && (!tipoBusca || tipoBusca === 'Serviço Geral')){
+    servicosDiarios.forEach(s => {
+      if(!dentroPeriodo(s.data)) return;
+      if(palavraBusca && !s.texto.toLowerCase().includes(palavraBusca)) return;
+      registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:s.texto});
+    });
   }
 
   registros.sort((a,b) => b.data.localeCompare(a.data));
