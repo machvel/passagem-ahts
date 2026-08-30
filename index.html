@@ -1890,6 +1890,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   if(!data){ status.textContent = 'Escolha a data da manutenção.'; return; }
 
   const duplicados = [];
+  const chavesVistas = new Set();
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral' || !item.itemId) return;
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
@@ -1901,16 +1902,19 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
         ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
         : item.descricao.trim();
       if(!textoFinal) return;
+      const chave = `${item.itemId}|${item.tipo}|${mancal||''}|${textoFinal.trim().toLowerCase()}`;
       const existentes = manutencoesDiarias[item.itemId] || [];
-      const jaExiste = existentes.some(m =>
+      const jaExisteSalvo = existentes.some(m =>
         m.id !== item.editandoId &&
         m.data === data && m.tipo === item.tipo &&
         (m.mancal || null) === mancal &&
         (m.descricao||'').trim().toLowerCase() === textoFinal.trim().toLowerCase()
       );
-      if(jaExiste){
+      const jaExisteNoLote = chavesVistas.has(chave);
+      if(jaExisteSalvo || jaExisteNoLote){
         duplicados.push(mancal ? `${equipSelecionado.nome} — ${mancal}` : equipSelecionado.nome);
       }
+      chavesVistas.add(chave);
     });
   });
   if(duplicados.length > 0){
