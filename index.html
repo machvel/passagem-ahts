@@ -566,12 +566,36 @@ const SECOES = [
     {id:'comp2', nome:'Compressor de Ar 2', tipo:'simples', manut:['Filtro','Óleo','Outras']}
   ]},
   {key:'gerais', titulo:'Equipamentos gerais', itens:[
-    'Bomba de Incêndio Principal','Bomba de Incêndio Emergência','Frigoríficas','Ar Condicionado',
-    'Sistema Hidróforo','Filtros CJC','Servo','ETE','OWS 1/2','Chiller',"Fifi's",'Stern Tube',
-    'Mancais da Linha de Eixo','Purificadores','Bilge System','Watermaker','Ventilação/Exaustão',
-    'Aquecedor de Água','Triplex','Alars','Bote de Resgate','Ups/Baterias',
-    'Guindaste do Convés (Trollers)','Anchor Windlass','Tugger','Guincho','DGE','Sistema de Lastro','Sistema de Fuel'
-  ].map((n,i)=>({id:'ger_'+i, nome:n, tipo:'gerais'}))}
+    {id:'ger_0', nome:'Bomba de Incêndio Principal', tipo:'gerais'},
+    {id:'ger_1', nome:'Bomba de Incêndio Emergência', tipo:'gerais'},
+    {id:'ger_2', nome:'Frigoríficas', tipo:'gerais'},
+    {id:'ger_3', nome:'Ar Condicionado', tipo:'gerais'},
+    {id:'ger_4', nome:'Sistema Hidróforo', tipo:'gerais'},
+    {id:'ger_5', nome:'Filtros CJC', tipo:'gerais'},
+    {id:'ger_6', nome:'Servo', tipo:'gerais'},
+    {id:'ger_7', nome:'ETE', tipo:'gerais'},
+    {id:'ger_8', nome:'OWS 1/2', tipo:'gerais'},
+    {id:'ger_9', nome:'Chiller', tipo:'gerais'},
+    {id:'ger_10', nome:"Fifi's", tipo:'gerais'},
+    {id:'ger_11', nome:'Stern Tube', tipo:'gerais'},
+    {id:'ger_12', nome:'Mancais', tipo:'gerais'},
+    {id:'ger_13', nome:'Purificadores', tipo:'gerais'},
+    {id:'ger_14', nome:'Bilge System', tipo:'gerais'},
+    {id:'ger_15', nome:'Watermaker', tipo:'gerais'},
+    {id:'ger_16', nome:'Ventilação/Exaustão', tipo:'gerais'},
+    {id:'ger_17', nome:'Aquecedor de Água', tipo:'gerais'},
+    {id:'ger_18', nome:'Triplex', tipo:'gerais'},
+    {id:'ger_19', nome:'Alars', tipo:'gerais'},
+    {id:'ger_20', nome:'Bote de Resgate', tipo:'gerais'},
+    {id:'ger_21', nome:'Ups/Baterias', tipo:'gerais'},
+    {id:'ger_22', nome:'Guindaste do Convés (Trollers)', tipo:'gerais'},
+    {id:'ger_23', nome:'Anchor Windlass', tipo:'gerais'},
+    {id:'ger_24', nome:'Tugger', tipo:'gerais'},
+    {id:'ger_25', nome:'Guincho', tipo:'gerais'},
+    {id:'ger_26', nome:'DGE', tipo:'gerais'},
+    {id:'ger_27', nome:'Sistema de Lastro', tipo:'gerais'},
+    {id:'ger_28', nome:'Sistema de Fuel', tipo:'gerais'}
+  ]}
 ];
 
 SECOES.forEach(sec => sec.itens.forEach(it => {
@@ -907,6 +931,8 @@ function renderLub(){
 }
 
 const SERVICO_TIPOS = ['Arrumação','Conserto','Desobstrução','Instalação','Limpeza','Montagem','Pintura','Substituição','Suplementação','Outros'];
+const MANCAIS_LISTA = ['1P','2P','3P','1S','2S','3S','DE DG2','NDE DG2','DE DG3','NDE DG3','DE SG1','NDE SG1','DE SG2','NDE SG2'];
+const EQUIP_ID_MANCAIS = 'ger_12';
 
 function servicoTexto(item){ return typeof item === 'string' ? item : (item.texto || ''); }
 function servicoTipo(item){ return typeof item === 'string' ? 'Outros' : (item.tipo || 'Outros'); }
@@ -1320,6 +1346,7 @@ function renderManutencaoDraft(){
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const ehMotor = equipSelecionado && equipSelecionado.tipo === 'motor';
     const usaSeletorPreventivo = !ehServicoGeral && ehMotor && item.tipo === 'Preventiva';
+    const usaMancais = !ehServicoGeral && item.itemId === EQUIP_ID_MANCAIS;
     const usaCorrigido = item.tipo === 'Corretiva';
     const usaCBM = item.tipo === 'CBM';
 
@@ -1335,6 +1362,17 @@ function renderManutencaoDraft(){
           ${SERVICO_TIPOS.map(t => `<option value="${escA(t)}" ${t===item.categoria?'selected':''}>${esc(t)}</option>`).join('')}
         </select>
         <input type="text" class="campo-detalhe" placeholder="Descreva o serviço" value="${escA(item.descricao)}" style="flex:1 1 200px;">`;
+    }else if(usaMancais){
+      const mancaisSelecionados = item.mancais || [];
+      campoDetalheHtml = `<div style="flex:1 1 100%;">
+        <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:5px;">Selecione o(s) mancal(is)</label>
+        <div class="mancais-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:8px;">
+          ${MANCAIS_LISTA.map(m => `<label style="display:flex;align-items:center;gap:4px;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:11px;cursor:pointer;">
+            <input type="checkbox" class="chk-mancal" value="${escA(m)}" ${mancaisSelecionados.includes(m) ? 'checked' : ''}> ${esc(m)}
+          </label>`).join('')}
+        </div>
+        <input type="text" class="campo-detalhe" placeholder="Descrição adicional (opcional)" value="${escA(item.descricao)}" style="width:100%;">
+      </div>`;
     }else if(usaSeletorPreventivo){
       const opcoes = [...equipSelecionado.horas, ...equipSelecionado.filtros, 'Outros'];
       campoDetalheHtml = `<div style="flex:1 1 100%;">
@@ -1406,6 +1444,18 @@ function renderManutencaoDraft(){
       row.querySelector('.sel-categoria').addEventListener('change', e => item.categoria = e.target.value);
       row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
       if(!item.categoria) item.categoria = SERVICO_TIPOS[0];
+    }else if(usaMancais){
+      if(!item.mancais) item.mancais = [];
+      row.querySelectorAll('.chk-mancal').forEach(chk => {
+        chk.addEventListener('change', e => {
+          if(e.target.checked){
+            if(!item.mancais.includes(e.target.value)) item.mancais.push(e.target.value);
+          }else{
+            item.mancais = item.mancais.filter(m => m !== e.target.value);
+          }
+        });
+      });
+      row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
     }else if(usaSeletorPreventivo){
       row.querySelector('.campo-detalhe').addEventListener('change', e => { item.manutTipo = e.target.value; renderManutencaoDraft(); });
       if(!item.manutTipo) item.manutTipo = [...equipSelecionado.horas, ...equipSelecionado.filtros][0];
@@ -1502,7 +1552,7 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
         const resolvidoTxt = (m.tipo === 'CBM' && m.resolvidoCbm) ? (m.resolvidoCbmObs ? ` (Resolvido: ${m.resolvidoCbmObs})` : ' (Resolvido)') : '';
         const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}${resolvidoTxt}` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
+        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
       if(!st.obs.includes(bloco)){
         st.obs = st.obs.trim() ? st.obs.trim() + '\n' + bloco : bloco;
@@ -1512,7 +1562,7 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
       st.atencao = true;
       diariasPendentes.forEach(m => {
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        const linha = `[Diário ${fmtDate(m.data)}] ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
+        const linha = `[Diário ${fmtDate(m.data)}] ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
         if(!st.pendencias.includes(linha)) st.pendencias.push(linha);
       });
     }
@@ -1615,6 +1665,11 @@ function renderEstatisticasConsumo(containerId, itens, leiturasObj, unidade, lab
   }
 }
 
+function descricaoManut(m){
+  if(m.mancal) return m.mancal + (m.descricao ? ': ' + m.descricao : '');
+  return m.descricao;
+}
+
 function manutencaoEhPendente(m){
   if(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')) return true;
   if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico') && !m.resolvidoCbm) return true;
@@ -1665,10 +1720,21 @@ const INTERVALO_FIXO = {
   dg2: '600H', dg3: '600H'
 };
 
+const APELIDO_INTERVALO = {
+  '12.000H': 'Turbina',
+  '20.000H': 'Top End',
+  '40.000H': 'Overhaul'
+};
+
+function tipoComApelido(tipo){
+  return APELIDO_INTERVALO[tipo] ? `${tipo} (${APELIDO_INTERVALO[tipo]})` : tipo;
+}
+
 function renderCardVencimento(nome, tipo, calc){
+  const tipoLabel = tipoComApelido(tipo);
   if(!calc){
     return `<div class="lub-cell" style="border-color:var(--border);">
-      <label>${esc(nome)} · ${esc(tipo)}</label>
+      <label>${esc(nome)} · ${esc(tipoLabel)}</label>
       <div style="font-family:var(--mono);font-size:11px;color:var(--text-faint);">Sem registro ainda</div>
     </div>`;
   }
@@ -1678,7 +1744,7 @@ function renderCardVencimento(nome, tipo, calc){
     ? `Vencida há ${Math.abs(Math.round(calc.restante))}h`
     : `Faltam ${Math.round(calc.restante)}h`;
   return `<div class="lub-cell" style="border-color:${cor};">
-    <label style="color:${cor};">${esc(nome)} · ${esc(tipo)}</label>
+    <label style="color:${cor};">${esc(nome)} · ${esc(tipoLabel)}</label>
     <div style="font-family:var(--mono);font-size:12.5px;font-weight:600;color:${cor};">${texto}</div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px;">próx. em ${Math.round(calc.proximoVencimento)}h</div>
   </div>`;
@@ -1813,6 +1879,35 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   const status = document.getElementById('manutencao-status');
   if(!data){ status.textContent = 'Escolha a data da manutenção.'; return; }
 
+  const duplicados = [];
+  manutencaoRascunho.forEach(item => {
+    if(item.tipo === 'Serviço Geral' || !item.itemId) return;
+    const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
+    const usaSeletorPreventivoPrev = equipSelecionado && equipSelecionado.tipo === 'motor' && item.tipo === 'Preventiva';
+    const mancaisAlvo = item.itemId === EQUIP_ID_MANCAIS ? (item.mancais || []) : [null];
+    mancaisAlvo.forEach(mancal => {
+      if(item.itemId === EQUIP_ID_MANCAIS && !mancal) return;
+      const textoFinal = usaSeletorPreventivoPrev
+        ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
+        : item.descricao.trim();
+      if(!textoFinal) return;
+      const existentes = manutencoesDiarias[item.itemId] || [];
+      const jaExiste = existentes.some(m =>
+        m.id !== item.editandoId &&
+        m.data === data && m.tipo === item.tipo &&
+        (m.mancal || null) === mancal &&
+        (m.descricao||'').trim().toLowerCase() === textoFinal.trim().toLowerCase()
+      );
+      if(jaExiste){
+        duplicados.push(mancal ? `${equipSelecionado.nome} — ${mancal}` : equipSelecionado.nome);
+      }
+    });
+  });
+  if(duplicados.length > 0){
+    const lista = [...new Set(duplicados)].join(', ');
+    if(!confirm(`Já existe um registro parecido hoje pra: ${lista}. Confirma salvar mesmo assim?`)) return;
+  }
+
   let manutSalvas = 0, servicosSalvos = 0;
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral'){
@@ -1825,6 +1920,30 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(!item.itemId) return;
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const usaSeletorPreventivo = equipSelecionado && equipSelecionado.tipo === 'motor' && item.tipo === 'Preventiva';
+
+    if(item.itemId === EQUIP_ID_MANCAIS){
+      const mancaisSelecionados = item.mancais || [];
+      if(mancaisSelecionados.length === 0) return;
+      if(item.editandoId && item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
+        manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
+      }
+      const freeText = item.descricao.trim();
+      mancaisSelecionados.forEach((mancal, idx) => {
+        const registroAtualizado = {
+          id: (idx === 0 && item.editandoId) ? item.editandoId : uid(),
+          data, descricao: freeText, mancal, horimetro: item.horimetro.trim(), tipo: item.tipo,
+          corrigido: item.tipo === 'Corretiva' ? (item.corrigido === true) : null,
+          idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : '',
+          statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null,
+          resultado: item.tipo === 'CBM' ? (item.resultado || 'Normal') : null
+        };
+        if(!manutencoesDiarias[item.itemId]) manutencoesDiarias[item.itemId] = [];
+        manutencoesDiarias[item.itemId].push(registroAtualizado);
+        manutSalvas++;
+      });
+      return;
+    }
+
     const textoFinal = usaSeletorPreventivo
       ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
       : item.descricao.trim();
@@ -1907,7 +2026,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       const pendente = m.tipo === 'Corretiva' && m.corrigido === false;
       const cbmPendente = manutencaoEhPendente(m) && m.tipo === 'CBM';
       registros.push({
-        data:m.data, tipo:m.tipo, desc:`${nome}: ${m.descricao}${m.horimetro?' ('+m.horimetro+'h)':''}${statusTxt}${idTxt}`,
+        data:m.data, tipo:m.tipo, desc:`${nome}: ${descricaoManut(m)}${m.horimetro?' ('+m.horimetro+'h)':''}${statusTxt}${idTxt}`,
         equipId: id, recId: m.id, mostrarMarcar: pendente, mostrarResolverCbm: cbmPendente, ehManutencao: true
       });
     });
@@ -2023,7 +2142,7 @@ function renderPendenciasDiarioTab(){
     const ehCbmPendente = it.m.tipo === 'CBM';
     return `<div class="pend-item" style="cursor:default;">
       <div class="nome">${esc(it.nome)}${it.m.tipo === 'CBM' ? ' — CBM' : ''}</div>
-      <div>${esc(it.m.descricao)}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${resultadoTxt}${idTxt}</div>
+      <div>${esc(descricaoManut(it.m))}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${resultadoTxt}${idTxt}</div>
       <div class="meta">Aberta em ${fmtDate(it.m.data)}</div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
         ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
@@ -2101,6 +2220,7 @@ function editarManutencao(equipId, recId){
     idFluig: registro.idFluig || '',
     statusEquip: registro.statusEquip || 'operacional',
     resultado: registro.resultado || 'Normal',
+    mancais: registro.mancal ? [registro.mancal] : [],
     editandoId: registro.id,
     editandoEquipId: equipId
   });
@@ -2171,7 +2291,7 @@ function buildReport(){
         const resolvidoTxt = (m.tipo === 'CBM' && m.resolvidoCbm) ? (m.resolvidoCbmObs ? ` (Resolvido: ${m.resolvidoCbmObs})` : ' (Resolvido)') : '';
         const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}${resolvidoTxt}` : '';
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
+        return `[Diário ${fmtDate(m.data)}] ${m.tipo}: ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${statusTxt}${resultadoTxt}${correcaoTxt}${idTxt}`;
       }).join('\n');
       if(!obsFinal.includes(bloco)){
         obsFinal = obsFinal ? obsFinal + '\n' + bloco : bloco;
@@ -2182,7 +2302,7 @@ function buildReport(){
     if(diariasPendentes.length){
       diariasPendentes.forEach(m => {
         const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        const linha = `[Diário ${fmtDate(m.data)}] ${m.descricao}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
+        const linha = `[Diário ${fmtDate(m.data)}] ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
         if(!pendenciasFinal.includes(linha)) pendenciasFinal.push(linha);
       });
     }
