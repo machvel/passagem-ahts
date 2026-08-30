@@ -584,7 +584,7 @@ const SECOES = [
     {id:'ger_5', nome:'Filtros CJC', tipo:'gerais'},
     {id:'ger_6', nome:'Servo', tipo:'gerais'},
     {id:'ger_7', nome:'ETE', tipo:'gerais'},
-    {id:'ger_8', nome:'OWS 1/2', tipo:'gerais'},
+    {id:'ger_8', nome:'OWS', tipo:'gerais'},
     {id:'ger_9', nome:'Chiller', tipo:'gerais'},
     {id:'ger_10', nome:"Fifi's", tipo:'gerais'},
     {id:'ger_11', nome:'Stern Tube', tipo:'gerais'},
@@ -598,7 +598,7 @@ const SECOES = [
     {id:'ger_19', nome:'Alars', tipo:'gerais'},
     {id:'ger_20', nome:'Bote de Resgate', tipo:'gerais'},
     {id:'ger_21', nome:'Ups/Baterias', tipo:'gerais'},
-    {id:'ger_22', nome:'Guindaste do Convés (Trollers)', tipo:'gerais'},
+    {id:'ger_22', nome:'Trolley', tipo:'gerais'},
     {id:'ger_23', nome:'Anchor Windlass', tipo:'gerais'},
     {id:'ger_24', nome:'Tugger', tipo:'gerais'},
     {id:'ger_25', nome:'Guincho', tipo:'gerais'},
@@ -941,8 +941,20 @@ function renderLub(){
 }
 
 const SERVICO_TIPOS = ['Arrumação','Conserto','Desobstrução','Instalação','Limpeza','Montagem','Pintura','Substituição','Suplementação','Outros'];
-const MANCAIS_LISTA = ['1P','2P','3P','1S','2S','3S','DE DG2','NDE DG2','DE DG3','NDE DG3','DE SG1','NDE SG1','DE SG2','NDE SG2'];
-const EQUIP_ID_MANCAIS = 'ger_12';
+const SUBITENS_POR_EQUIP = {
+  'ger_4': ['Bomba 1','Bomba 2'],
+  'ger_5': ['BTT 1','BTT 2','BTT 3','STT1','STT 2','RED. BB','RED. BE'],
+  'ger_8': ['OWS 1','OWS 2'],
+  'ger_9': ['Chiller A','Chiller B'],
+  'ger_12': ['1P','2P','3P','1S','2S','3S','DE DG2','NDE DG2','DE DG3','NDE DG3','DE SG1','NDE SG1','DE SG2','NDE SG2'],
+  'ger_13': ['1P','2P','1S','2S'],
+  'ger_15': ['Watermaker 1','Watermaker 2'],
+  'ger_18': ['Triplex BB','Triplex BE'],
+  'ger_21': ['UPS A','UPS B','UPS C','UPS D','UPS E','UPS F','UPS G','UPS H','UPS J','UPS K','UPS L','UPS M','AUTO PMS A','AUTO PMS B','IBS/TCS 1','IBS/TCS 2','IBS/TCS 3','BTT 1','BBT 2','BTT 3','STT 1','STT2','AUXILIAR'],
+  'ger_22': ['Trolley BB','Trolley BE'],
+  'ger_24': ['Burrinho BB','Burrinho BE','Cabrestate BB','Cabrestate BE'],
+  'ger_25': ['Principal','Tow BB','Tow BE','Sec. BB','Sec. BE']
+};
 
 function servicoTexto(item){ return typeof item === 'string' ? item : (item.texto || ''); }
 function servicoTipo(item){ return typeof item === 'string' ? 'Outros' : (item.tipo || 'Outros'); }
@@ -1356,7 +1368,7 @@ function renderManutencaoDraft(){
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const ehMotor = equipSelecionado && equipSelecionado.tipo === 'motor';
     const usaSeletorPreventivo = !ehServicoGeral && ehMotor && item.tipo === 'Preventiva';
-    const usaMancais = !ehServicoGeral && item.itemId === EQUIP_ID_MANCAIS;
+    const usaSubItens = !ehServicoGeral && !!SUBITENS_POR_EQUIP[item.itemId];
     const usaCorrigido = item.tipo === 'Corretiva';
     const usaCBM = item.tipo === 'CBM';
 
@@ -1372,13 +1384,14 @@ function renderManutencaoDraft(){
           ${SERVICO_TIPOS.map(t => `<option value="${escA(t)}" ${t===item.categoria?'selected':''}>${esc(t)}</option>`).join('')}
         </select>
         <input type="text" class="campo-detalhe" placeholder="Descreva o serviço" value="${escA(item.descricao)}" style="flex:1 1 200px;">`;
-    }else if(usaMancais){
-      const mancaisSelecionados = item.mancais || [];
+    }else if(usaSubItens){
+      const opcoesSubItens = SUBITENS_POR_EQUIP[item.itemId];
+      const subItensSelecionados = item.subItens || [];
       campoDetalheHtml = `<div style="flex:1 1 100%;">
-        <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:5px;">Selecione o(s) mancal(is)</label>
-        <div class="mancais-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:8px;">
-          ${MANCAIS_LISTA.map(m => `<label style="display:flex;align-items:center;gap:4px;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:11px;cursor:pointer;">
-            <input type="checkbox" class="chk-mancal" value="${escA(m)}" ${mancaisSelecionados.includes(m) ? 'checked' : ''}> ${esc(m)}
+        <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:5px;">Selecione o(s) item(ns) específico(s)</label>
+        <div class="subitens-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:8px;">
+          ${opcoesSubItens.map(s => `<label style="display:flex;align-items:center;gap:4px;background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:11px;cursor:pointer;">
+            <input type="checkbox" class="chk-subitem" value="${escA(s)}" ${subItensSelecionados.includes(s) ? 'checked' : ''}> ${esc(s)}
           </label>`).join('')}
         </div>
         <input type="text" class="campo-detalhe" placeholder="Descrição adicional (opcional)" value="${escA(item.descricao)}" style="width:100%;">
@@ -1454,14 +1467,14 @@ function renderManutencaoDraft(){
       row.querySelector('.sel-categoria').addEventListener('change', e => item.categoria = e.target.value);
       row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
       if(!item.categoria) item.categoria = SERVICO_TIPOS[0];
-    }else if(usaMancais){
-      if(!item.mancais) item.mancais = [];
-      row.querySelectorAll('.chk-mancal').forEach(chk => {
+    }else if(usaSubItens){
+      if(!item.subItens) item.subItens = [];
+      row.querySelectorAll('.chk-subitem').forEach(chk => {
         chk.addEventListener('change', e => {
           if(e.target.checked){
-            if(!item.mancais.includes(e.target.value)) item.mancais.push(e.target.value);
+            if(!item.subItens.includes(e.target.value)) item.subItens.push(e.target.value);
           }else{
-            item.mancais = item.mancais.filter(m => m !== e.target.value);
+            item.subItens = item.subItens.filter(s => s !== e.target.value);
           }
         });
       });
@@ -1676,7 +1689,7 @@ function renderEstatisticasConsumo(containerId, itens, leiturasObj, unidade, lab
 }
 
 function descricaoManut(m){
-  if(m.mancal) return m.mancal + (m.descricao ? ': ' + m.descricao : '');
+  if(m.subItem) return m.subItem + (m.descricao ? ': ' + m.descricao : '');
   return m.descricao;
 }
 
@@ -1895,24 +1908,24 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(item.tipo === 'Serviço Geral' || !item.itemId) return;
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const usaSeletorPreventivoPrev = equipSelecionado && equipSelecionado.tipo === 'motor' && item.tipo === 'Preventiva';
-    const mancaisAlvo = item.itemId === EQUIP_ID_MANCAIS ? (item.mancais || []) : [null];
-    mancaisAlvo.forEach(mancal => {
-      if(item.itemId === EQUIP_ID_MANCAIS && !mancal) return;
+    const subItensAlvo = SUBITENS_POR_EQUIP[item.itemId] ? (item.subItens || []) : [null];
+    subItensAlvo.forEach(subItem => {
+      if(SUBITENS_POR_EQUIP[item.itemId] && !subItem) return;
       const textoFinal = usaSeletorPreventivoPrev
         ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
         : item.descricao.trim();
       if(!textoFinal) return;
-      const chave = `${item.itemId}|${item.tipo}|${mancal||''}|${textoFinal.trim().toLowerCase()}`;
+      const chave = `${item.itemId}|${item.tipo}|${subItem||''}|${textoFinal.trim().toLowerCase()}`;
       const existentes = manutencoesDiarias[item.itemId] || [];
       const jaExisteSalvo = existentes.some(m =>
         m.id !== item.editandoId &&
         m.data === data && m.tipo === item.tipo &&
-        (m.mancal || null) === mancal &&
+        (m.subItem || null) === subItem &&
         (m.descricao||'').trim().toLowerCase() === textoFinal.trim().toLowerCase()
       );
       const jaExisteNoLote = chavesVistas.has(chave);
       if(jaExisteSalvo || jaExisteNoLote){
-        duplicados.push(mancal ? `${equipSelecionado.nome} — ${mancal}` : equipSelecionado.nome);
+        duplicados.push(subItem ? `${equipSelecionado.nome} — ${subItem}` : equipSelecionado.nome);
       }
       chavesVistas.add(chave);
     });
@@ -1935,17 +1948,17 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const usaSeletorPreventivo = equipSelecionado && equipSelecionado.tipo === 'motor' && item.tipo === 'Preventiva';
 
-    if(item.itemId === EQUIP_ID_MANCAIS){
-      const mancaisSelecionados = item.mancais || [];
-      if(mancaisSelecionados.length === 0) return;
+    if(SUBITENS_POR_EQUIP[item.itemId]){
+      const subItensSelecionados = item.subItens || [];
+      if(subItensSelecionados.length === 0) return;
       if(item.editandoId && item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
         manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
       }
       const freeText = item.descricao.trim();
-      mancaisSelecionados.forEach((mancal, idx) => {
+      subItensSelecionados.forEach((subItem, idx) => {
         const registroAtualizado = {
           id: (idx === 0 && item.editandoId) ? item.editandoId : uid(),
-          data, descricao: freeText, mancal, horimetro: item.horimetro.trim(), tipo: item.tipo,
+          data, descricao: freeText, subItem, horimetro: item.horimetro.trim(), tipo: item.tipo,
           corrigido: item.tipo === 'Corretiva' ? (item.corrigido === true) : null,
           idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : '',
           statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null,
@@ -2242,7 +2255,7 @@ function editarManutencao(equipId, recId){
     idFluig: registro.idFluig || '',
     statusEquip: registro.statusEquip || 'operacional',
     resultado: registro.resultado || 'Normal',
-    mancais: registro.mancal ? [registro.mancal] : [],
+    subItens: registro.subItem ? [registro.subItem] : [],
     editandoId: registro.id,
     editandoEquipId: equipId
   });
