@@ -1507,7 +1507,14 @@ function renderManutencaoDraft(){
     if(!ehServicoGeral){
       row.querySelector('.inp-horimetro').addEventListener('input', e => item.horimetro = e.target.value);
     }
-    row.querySelector('.remove-btn').addEventListener('click', () => { manutencaoRascunho.splice(i,1); renderManutencaoDraft(); });
+    row.querySelector('.remove-btn').addEventListener('click', async () => {
+      if(item.editandoId && item.editandoEquipId){
+        const excluiu = await excluirManutencao(item.editandoEquipId, item.editandoId);
+        if(!excluiu) return;
+      }
+      manutencaoRascunho.splice(i,1);
+      renderManutencaoDraft();
+    });
     c.appendChild(row);
   });
 }
@@ -1803,6 +1810,7 @@ function renderProximasManutencoes(){
 }
 
 let alertaVencimentosFechado = false;
+let alertaVencimentosEquipPrincipal = null;
 
 function atualizarAlertaVencimentos(){
   const alerta = document.getElementById('alerta-vencimentos');
@@ -1821,9 +1829,11 @@ function atualizarAlertaVencimentos(){
   });
   if(urgentes.length === 0){
     alerta.style.display = 'none';
+    alertaVencimentosEquipPrincipal = null;
     return;
   }
   urgentes.sort((a,b) => a.calc.restante - b.calc.restante);
+  alertaVencimentosEquipPrincipal = urgentes[0].nome;
   const LIMITE_EXIBICAO = 4;
   const nomes = urgentes.slice(0, LIMITE_EXIBICAO).map(u => {
     const vencida = u.calc.restante < 0;
@@ -2060,7 +2070,16 @@ document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
     document.getElementById('alerta-vencimentos').style.display = 'none';
     return;
   }
-  document.querySelector('.tab[data-tab="diario"]').click();
+  document.querySelector('.tab[data-tab="historico"]').click();
+  if(alertaVencimentosEquipPrincipal){
+    document.getElementById('h-consulta-equip').value = alertaVencimentosEquipPrincipal;
+    document.getElementById('h-consulta-palavra').value = '';
+    document.getElementById('h-consulta-tipo').value = '';
+    document.getElementById('h-consulta-idfluig').value = '';
+    document.getElementById('h-consulta-inicio').value = '';
+    document.getElementById('h-consulta-fim').value = '';
+    document.getElementById('btn-consultar-diario').click();
+  }
 });
 
 document.getElementById('btn-consultar-diario').addEventListener('click', () => {
@@ -2136,7 +2155,6 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       ${r.mostrarMarcar ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
       ${r.mostrarResolverCbm ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
       <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
-      <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;background:var(--red-dim);border-color:var(--red);color:#fff;">Excluir</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
   </div>`).join('');
@@ -2228,7 +2246,6 @@ function renderPendenciasDiarioTab(){
         ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
         ${ehCbmPendente ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
         <button type="button" class="add-btn" data-editar-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Editar</button>
-        <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;background:var(--red-dim);border-color:var(--red);color:#fff;">Excluir</button>
       </div>
     </div>`;
   }).join('');
@@ -2252,9 +2269,7 @@ document.getElementById('lista-pendencias-diario').addEventListener('click', asy
     return;
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
-  if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
-  const btnExcluir = e.target.closest('[data-excluir-manut]');
-  if(btnExcluir) await excluirManutencao(btnExcluir.dataset.equip, btnExcluir.dataset.rec);
+  if(btnEditar) editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec);
 });
 
 document.getElementById('resultado-consulta').addEventListener('click', async (e) => {
@@ -2276,8 +2291,6 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
-  const btnExcluir = e.target.closest('[data-excluir-manut]');
-  if(btnExcluir){ await excluirManutencao(btnExcluir.dataset.equip, btnExcluir.dataset.rec); return; }
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
   if(btnEditarLeitura) editarLeitura(btnEditarLeitura.dataset.data);
 });
@@ -2285,10 +2298,10 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
 async function excluirManutencao(equipId, recId){
   const arr = manutencoesDiarias[equipId] || [];
   const registro = arr.find(m => m.id === recId);
-  if(!registro) return;
+  if(!registro) return false;
   const nomeEquip = EQUIP_ITEM_MAP[equipId] ? EQUIP_ITEM_MAP[equipId].nome : equipId;
   const descricaoRegistro = descricaoManut(registro);
-  if(!confirm(`Excluir esse registro de ${nomeEquip} (${fmtDate(registro.data)})?\n"${descricaoRegistro}"\n\nEssa ação não pode ser desfeita.`)) return;
+  if(!confirm(`Excluir esse registro de ${nomeEquip} (${fmtDate(registro.data)})?\n"${descricaoRegistro}"\n\nEssa ação não pode ser desfeita.`)) return false;
   manutencoesDiarias[equipId] = arr.filter(m => m.id !== recId);
   await salvarManutencoesDiarias();
   showToast('Registro excluído');
@@ -2296,6 +2309,7 @@ async function excluirManutencao(equipId, recId){
   if(document.getElementById('resultado-consulta').innerHTML.trim() !== ''){
     document.getElementById('btn-consultar-diario').click();
   }
+  return true;
 }
 
 function editarLeitura(data){
