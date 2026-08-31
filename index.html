@@ -351,7 +351,11 @@
   <div class="panel">
     <div class="section-title" style="margin-bottom:8px;">Consultar registros do Diário</div>
     <p class="empty-hint" style="padding:0 0 8px;">Mostra manutenções e serviços gerais (não leituras de horímetro/fuel/óleo, pra não poluir a tela). Busque por equipamento e/ou período, ou deixe em branco pra ver tudo.</p>
-    <input type="text" id="h-consulta-equip" list="dl-equip" placeholder="Buscar equipamento (opcional)">
+    <div class="row2">
+      <input type="text" id="h-consulta-equip" list="dl-equip" placeholder="Buscar equipamento (opcional)">
+      <button class="add-btn" id="btn-add-equip-busca" type="button">+ Adicionar</button>
+    </div>
+    <div id="equipamentos-busca-selecionados" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
     <div class="row2" style="margin-top:8px;">
       <input type="text" id="h-consulta-palavra" placeholder="Buscar palavra na descrição (opcional)">
       <select id="h-consulta-tipo">
@@ -1731,6 +1735,41 @@ function manutencaoEhPendente(m){
   return false;
 }
 
+const INTERVALO_TROCA_BATERIA_ANOS = 4;
+const EQUIP_ID_BATERIAS = 'ger_21';
+
+const LIMITE_AVISO_BATERIA_DIAS = 180;
+
+function diasRestantesTrocaBateria(subItem){
+  const registros = (manutencoesDiarias[EQUIP_ID_BATERIAS] || []).filter(m => (m.tipo === 'Preventiva' || m.tipo === 'Corretiva') && m.subItem === subItem);
+  if(registros.length === 0) return null;
+  const ultimaData = registros.reduce((max, m) => m.data > max ? m.data : max, registros[0].data);
+  const dataUltima = new Date(ultimaData + 'T00:00:00');
+  const dataProxima = new Date(dataUltima);
+  dataProxima.setFullYear(dataProxima.getFullYear() + INTERVALO_TROCA_BATERIA_ANOS);
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
+  return { diasRestantes, dataProxima: dataProxima.toISOString().slice(0,10), ultimaData };
+}
+
+function renderCardVencimentoBateria(nome, subItem, calc){
+  if(!calc){
+    return `<div class="lub-cell" style="border-color:var(--border);">
+      <label>${esc(nome)} · ${esc(subItem)}</label>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-faint);">Sem registro ainda</div>
+    </div>`;
+  }
+  const vencida = calc.diasRestantes < 0;
+  const cor = vencida ? 'var(--red)' : (calc.diasRestantes < LIMITE_AVISO_BATERIA_DIAS ? 'var(--amber)' : 'var(--green)');
+  const texto = vencida ? `Vencida há ${Math.abs(calc.diasRestantes)} dias` : `Faltam ${calc.diasRestantes} dias`;
+  return `<div class="lub-cell" style="border-color:${cor};">
+    <label style="color:${cor};">${esc(nome)} · ${esc(subItem)}</label>
+    <div style="font-family:var(--mono);font-size:12.5px;font-weight:600;color:${cor};">${texto}</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px;">próx. em ${fmtDate(calc.dataProxima)}</div>
+  </div>`;
+}
+
 function parseIntervaloHoras(tipoStr){
   const numero = (tipoStr || '').replace(/[.\sH]/gi, '');
   const n = parseInt(numero, 10);
@@ -1811,6 +1850,37 @@ function renderProximasManutencoes(){
 
 let alertaVencimentosFechado = false;
 let alertaVencimentosEquipPrincipal = null;
+let equipamentosBuscaSelecionados = [];
+
+function renderChipsEquipBusca(){
+  const c = document.getElementById('equipamentos-busca-selecionados');
+  if(!c) return;
+  c.innerHTML = equipamentosBuscaSelecionados.map((eq, i) => `
+    <span style="background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:4px 10px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
+      ${esc(eq.nome)}
+      <span data-remove-chip="${i}" style="cursor:pointer;font-weight:700;">×</span>
+    </span>
+  `).join('');
+}
+
+document.getElementById('btn-add-equip-busca').addEventListener('click', () => {
+  const inp = document.getElementById('h-consulta-equip');
+  const nome = inp.value.trim();
+  const equip = ALL_EQUIP_ITEMS.find(eq => eq.nome === nome);
+  if(!equip){ showToast('Escolha um equipamento válido da lista'); return; }
+  if(!equipamentosBuscaSelecionados.some(e => e.id === equip.id)){
+    equipamentosBuscaSelecionados.push(equip);
+    renderChipsEquipBusca();
+  }
+  inp.value = '';
+});
+
+document.getElementById('equipamentos-busca-selecionados').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-remove-chip]');
+  if(!btn) return;
+  equipamentosBuscaSelecionados.splice(parseInt(btn.dataset.removeChip, 10), 1);
+  renderChipsEquipBusca();
+});
 
 function atualizarAlertaVencimentos(){
   const alerta = document.getElementById('alerta-vencimentos');
@@ -1824,21 +1894,36 @@ function atualizarAlertaVencimentos(){
     it.horas.forEach(tipo => {
       if(tipo === INTERVALO_FIXO[it.id]) return;
       const calc = horasRestantesManutencao(it.id, tipo);
-      if(calc && calc.restante < calc.intervalo * 0.3) urgentes.push({nome: it.nome, tipo, calc});
+      if(calc && calc.restante < calc.intervalo * 0.3){
+        urgentes.push({
+          exibicao: `${it.nome} · ${tipoComApelido(tipo)}${calc.restante < 0 ? ' (vencida)' : ''}`,
+          equipNomeBusca: it.nome,
+          pct: calc.restante / calc.intervalo
+        });
+      }
     });
+  });
+  const eqBateria = EQUIP_ITEM_MAP[EQUIP_ID_BATERIAS];
+  const totalDiasBateria = INTERVALO_TROCA_BATERIA_ANOS * 365;
+  SUBITENS_POR_EQUIP[EQUIP_ID_BATERIAS].forEach(subItem => {
+    const calc = diasRestantesTrocaBateria(subItem);
+    if(calc && calc.diasRestantes < LIMITE_AVISO_BATERIA_DIAS){
+      urgentes.push({
+        exibicao: `${eqBateria.nome} · ${subItem} (bateria)${calc.diasRestantes < 0 ? ' (vencida)' : ''}`,
+        equipNomeBusca: eqBateria.nome,
+        pct: calc.diasRestantes / totalDiasBateria
+      });
+    }
   });
   if(urgentes.length === 0){
     alerta.style.display = 'none';
     alertaVencimentosEquipPrincipal = null;
     return;
   }
-  urgentes.sort((a,b) => a.calc.restante - b.calc.restante);
-  alertaVencimentosEquipPrincipal = urgentes[0].nome;
+  urgentes.sort((a,b) => a.pct - b.pct);
+  alertaVencimentosEquipPrincipal = urgentes[0].equipNomeBusca;
   const LIMITE_EXIBICAO = 4;
-  const nomes = urgentes.slice(0, LIMITE_EXIBICAO).map(u => {
-    const vencida = u.calc.restante < 0;
-    return `${u.nome} · ${tipoComApelido(u.tipo)}${vencida ? ' (vencida)' : ''}`;
-  });
+  const nomes = urgentes.slice(0, LIMITE_EXIBICAO).map(u => u.exibicao);
   const resto = urgentes.length - LIMITE_EXIBICAO;
   const listaTexto = nomes.join(', ') + (resto > 0 ? ` e mais ${resto}` : '');
   alerta.innerHTML = `<span>⚠ ${esc(listaTexto)} — toque para ver</span><span id="alerta-vencimentos-fechar" style="float:right;font-weight:700;padding-left:12px;cursor:pointer;">×</span>`;
@@ -2072,6 +2157,8 @@ document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
   }
   document.querySelector('.tab[data-tab="historico"]').click();
   if(alertaVencimentosEquipPrincipal){
+    equipamentosBuscaSelecionados = [];
+    renderChipsEquipBusca();
     document.getElementById('h-consulta-equip').value = alertaVencimentosEquipPrincipal;
     document.getElementById('h-consulta-palavra').value = '';
     document.getElementById('h-consulta-tipo').value = '';
@@ -2091,10 +2178,16 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
   const dataFim = document.getElementById('h-consulta-fim').value;
   const resultEl = document.getElementById('resultado-consulta');
 
-  const equipFiltro = nomeBusca ? ALL_EQUIP_ITEMS.find(eq => eq.nome === nomeBusca) : null;
-  if(nomeBusca && !equipFiltro){
-    resultEl.innerHTML = '<p class="empty-hint">Equipamento não encontrado — escolha um da lista de sugestões.</p>';
-    return;
+  let equiposFiltro = [];
+  if(equipamentosBuscaSelecionados.length > 0){
+    equiposFiltro = equipamentosBuscaSelecionados.slice();
+  }else if(nomeBusca){
+    const equipUnico = ALL_EQUIP_ITEMS.find(eq => eq.nome === nomeBusca);
+    if(!equipUnico){
+      resultEl.innerHTML = '<p class="empty-hint">Equipamento não encontrado — escolha um da lista de sugestões, ou clique em "+ Adicionar".</p>';
+      return;
+    }
+    equiposFiltro = [equipUnico];
   }
 
   const dentroPeriodo = (data) => {
@@ -2103,7 +2196,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
     return true;
   };
 
-  const idsAlvo = equipFiltro ? [equipFiltro.id] : ALL_EQUIP_ITEMS.map(e => e.id);
+  const idsAlvo = equiposFiltro.length ? equiposFiltro.map(e => e.id) : ALL_EQUIP_ITEMS.map(e => e.id);
   const registros = [];
 
   idsAlvo.forEach(id => {
@@ -2125,7 +2218,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       });
     });
   });
-  if(!equipFiltro && !idFluigBusca && (!tipoBusca || tipoBusca === 'Serviço Geral')){
+  if(!equiposFiltro.length && !idFluigBusca && (!tipoBusca || tipoBusca === 'Serviço Geral')){
     servicosDiarios.forEach(s => {
       if(!dentroPeriodo(s.data)) return;
       if(palavraBusca && !s.texto.toLowerCase().includes(palavraBusca)) return;
@@ -2136,10 +2229,17 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
   registros.sort((a,b) => b.data.localeCompare(a.data));
 
   let vencimentoHtml = '';
-  const equipCompleto = equipFiltro ? EQUIP_ITEM_MAP[equipFiltro.id] : null;
-  if(equipCompleto && equipCompleto.horas && equipCompleto.horas.length){
-    const cards = equipCompleto.horas.map(tipo => renderCardVencimento(equipCompleto.nome, tipo, horasRestantesManutencao(equipCompleto.id, tipo))).join('');
+  const equiposComHoras = equiposFiltro.map(e => EQUIP_ITEM_MAP[e.id]).filter(eq => eq && eq.horas && eq.horas.length);
+  if(equiposComHoras.length){
+    const cards = equiposComHoras.map(eq =>
+      eq.horas.map(tipo => renderCardVencimento(eq.nome, tipo, horasRestantesManutencao(eq.id, tipo))).join('')
+    ).join('');
     vencimentoHtml = `<div class="section-title" style="margin-bottom:6px;font-size:12px;">Vencimentos por horas</div><div class="lub-grid" style="margin-bottom:14px;">${cards}</div>`;
+  }
+  if(equiposFiltro.some(e => e.id === EQUIP_ID_BATERIAS)){
+    const eqBateria = EQUIP_ITEM_MAP[EQUIP_ID_BATERIAS];
+    const cardsBateria = SUBITENS_POR_EQUIP[EQUIP_ID_BATERIAS].map(s => renderCardVencimentoBateria(eqBateria.nome, s, diasRestantesTrocaBateria(s))).join('');
+    vencimentoHtml += `<div class="section-title" style="margin-bottom:6px;font-size:12px;">Trocas de bateria (a cada ${INTERVALO_TROCA_BATERIA_ANOS} anos)</div><div class="lub-grid" style="margin-bottom:14px;">${cardsBateria}</div>`;
   }
 
   if(registros.length === 0){
