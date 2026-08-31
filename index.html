@@ -1693,6 +1693,31 @@ function descricaoManut(m){
   return m.descricao;
 }
 
+function distanciaLevenshtein(a, b){
+  const matriz = [];
+  for(let i = 0; i <= b.length; i++) matriz[i] = [i];
+  for(let j = 0; j <= a.length; j++) matriz[0][j] = j;
+  for(let i = 1; i <= b.length; i++){
+    for(let j = 1; j <= a.length; j++){
+      if(b.charAt(i-1) === a.charAt(j-1)){
+        matriz[i][j] = matriz[i-1][j-1];
+      }else{
+        matriz[i][j] = Math.min(matriz[i-1][j-1] + 1, matriz[i][j-1] + 1, matriz[i-1][j] + 1);
+      }
+    }
+  }
+  return matriz[b.length][a.length];
+}
+
+function similaridadeTexto(a, b){
+  a = (a || '').trim().toLowerCase();
+  b = (b || '').trim().toLowerCase();
+  if(a === b) return 1;
+  const maxLen = Math.max(a.length, b.length);
+  if(maxLen === 0) return 1;
+  return 1 - (distanciaLevenshtein(a, b) / maxLen);
+}
+
 function manutencaoEhPendente(m){
   if(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')) return true;
   if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico') && !m.resolvidoCbm) return true;
@@ -1777,9 +1802,15 @@ function renderProximasManutencoes(){
   atualizarAlertaVencimentos();
 }
 
+let alertaVencimentosFechado = false;
+
 function atualizarAlertaVencimentos(){
   const alerta = document.getElementById('alerta-vencimentos');
   if(!alerta) return;
+  if(alertaVencimentosFechado){
+    alerta.style.display = 'none';
+    return;
+  }
   const urgentes = [];
   MOTORES_ITEMS.forEach(it => {
     it.horas.forEach(tipo => {
@@ -1792,11 +1823,15 @@ function atualizarAlertaVencimentos(){
     alerta.style.display = 'none';
     return;
   }
-  const vencidas = urgentes.filter(u => u.calc.restante < 0).length;
-  const partes = [];
-  if(vencidas) partes.push(`${vencidas} vencida(s)`);
-  if(urgentes.length - vencidas) partes.push(`${urgentes.length - vencidas} perto de vencer`);
-  alerta.textContent = `⚠ ${partes.join(' e ')} — toque para ver`;
+  urgentes.sort((a,b) => a.calc.restante - b.calc.restante);
+  const LIMITE_EXIBICAO = 4;
+  const nomes = urgentes.slice(0, LIMITE_EXIBICAO).map(u => {
+    const vencida = u.calc.restante < 0;
+    return `${u.nome} · ${tipoComApelido(u.tipo)}${vencida ? ' (vencida)' : ''}`;
+  });
+  const resto = urgentes.length - LIMITE_EXIBICAO;
+  const listaTexto = nomes.join(', ') + (resto > 0 ? ` e mais ${resto}` : '');
+  alerta.innerHTML = `<span>⚠ ${esc(listaTexto)} — toque para ver</span><span id="alerta-vencimentos-fechar" style="float:right;font-weight:700;padding-left:12px;cursor:pointer;">×</span>`;
   alerta.style.display = 'block';
 }
 
@@ -1902,8 +1937,9 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   const status = document.getElementById('manutencao-status');
   if(!data){ status.textContent = 'Escolha a data da manutenção.'; return; }
 
+  const LIMIAR_SIMILARIDADE = 0.7;
   const duplicados = [];
-  const chavesVistas = new Set();
+  const entradasVistas = [];
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral' || !item.itemId) return;
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
@@ -1915,19 +1951,21 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
         ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
         : item.descricao.trim();
       if(!textoFinal) return;
-      const chave = `${item.itemId}|${item.tipo}|${subItem||''}|${textoFinal.trim().toLowerCase()}`;
       const existentes = manutencoesDiarias[item.itemId] || [];
       const jaExisteSalvo = existentes.some(m =>
         m.id !== item.editandoId &&
         m.data === data && m.tipo === item.tipo &&
         (m.subItem || null) === subItem &&
-        (m.descricao||'').trim().toLowerCase() === textoFinal.trim().toLowerCase()
+        similaridadeTexto(m.descricao, textoFinal) >= LIMIAR_SIMILARIDADE
       );
-      const jaExisteNoLote = chavesVistas.has(chave);
+      const jaExisteNoLote = entradasVistas.some(en =>
+        en.itemId === item.itemId && en.tipo === item.tipo && en.subItem === subItem &&
+        similaridadeTexto(en.texto, textoFinal) >= LIMIAR_SIMILARIDADE
+      );
       if(jaExisteSalvo || jaExisteNoLote){
         duplicados.push(subItem ? `${equipSelecionado.nome} — ${subItem}` : equipSelecionado.nome);
       }
-      chavesVistas.add(chave);
+      entradasVistas.push({itemId: item.itemId, tipo: item.tipo, subItem, texto: textoFinal});
     });
   });
   if(duplicados.length > 0){
@@ -2015,7 +2053,13 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
 
 document.getElementById('h-diario-data').valueAsDate = new Date();
 document.getElementById('h-manutencao-data').valueAsDate = new Date();
-document.getElementById('alerta-vencimentos').addEventListener('click', () => {
+document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
+  if(e.target.id === 'alerta-vencimentos-fechar'){
+    e.stopPropagation();
+    alertaVencimentosFechado = true;
+    document.getElementById('alerta-vencimentos').style.display = 'none';
+    return;
+  }
   document.querySelector('.tab[data-tab="diario"]').click();
 });
 
@@ -2092,6 +2136,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       ${r.mostrarMarcar ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
       ${r.mostrarResolverCbm ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
       <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
+      <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;background:var(--red-dim);border-color:var(--red);color:#fff;">Excluir</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
   </div>`).join('');
@@ -2183,6 +2228,7 @@ function renderPendenciasDiarioTab(){
         ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
         ${ehCbmPendente ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
         <button type="button" class="add-btn" data-editar-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Editar</button>
+        <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;background:var(--red-dim);border-color:var(--red);color:#fff;">Excluir</button>
       </div>
     </div>`;
   }).join('');
@@ -2206,7 +2252,9 @@ document.getElementById('lista-pendencias-diario').addEventListener('click', asy
     return;
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
-  if(btnEditar) editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec);
+  if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
+  const btnExcluir = e.target.closest('[data-excluir-manut]');
+  if(btnExcluir) await excluirManutencao(btnExcluir.dataset.equip, btnExcluir.dataset.rec);
 });
 
 document.getElementById('resultado-consulta').addEventListener('click', async (e) => {
@@ -2228,9 +2276,27 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
+  const btnExcluir = e.target.closest('[data-excluir-manut]');
+  if(btnExcluir){ await excluirManutencao(btnExcluir.dataset.equip, btnExcluir.dataset.rec); return; }
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
   if(btnEditarLeitura) editarLeitura(btnEditarLeitura.dataset.data);
 });
+
+async function excluirManutencao(equipId, recId){
+  const arr = manutencoesDiarias[equipId] || [];
+  const registro = arr.find(m => m.id === recId);
+  if(!registro) return;
+  const nomeEquip = EQUIP_ITEM_MAP[equipId] ? EQUIP_ITEM_MAP[equipId].nome : equipId;
+  const descricaoRegistro = descricaoManut(registro);
+  if(!confirm(`Excluir esse registro de ${nomeEquip} (${fmtDate(registro.data)})?\n"${descricaoRegistro}"\n\nEssa ação não pode ser desfeita.`)) return;
+  manutencoesDiarias[equipId] = arr.filter(m => m.id !== recId);
+  await salvarManutencoesDiarias();
+  showToast('Registro excluído');
+  renderPendenciasDiarioTab();
+  if(document.getElementById('resultado-consulta').innerHTML.trim() !== ''){
+    document.getElementById('btn-consultar-diario').click();
+  }
+}
 
 function editarLeitura(data){
   document.getElementById('h-diario-data').value = data;
