@@ -412,8 +412,13 @@
   <div class="panel" style="margin-top:14px;">
     <div class="section-title" style="margin-bottom:8px;">Restaurar de um arquivo de backup</div>
     <p class="empty-hint" style="padding:0 0 8px;">Suas 6 passagens antigas (07/01/2026 a 19/08/2026) já entram automaticamente no histórico. Use isto só se precisar restaurar um backup exportado.</p>
-    <input type="file" id="h-import-file" accept=".json,application/json,text/plain,text/json" style="padding:8px;">
-    <p class="empty-hint" id="preload-status" style="padding:8px 0 0;"></p>
+  <div class="panel" style="margin-top:14px;">
+    <div class="section-title" style="margin-bottom:8px;">Notas técnicas do equipamento</div>
+    <p class="empty-hint" style="padding:0 0 8px;">Guarde referências que não mudam com frequência: folga axial, medidas de alinhamento, torques, números de série, etc. Não aparece na passagem de serviço — é só uma consulta rápida.</p>
+    <input type="text" id="h-nota-equip" list="dl-equip" placeholder="Escolha o equipamento">
+    <textarea id="h-nota-texto" style="min-height:100px;margin-top:8px;" placeholder="Ex: Folga axial do eixo: 0,15 - 0,25mm&#10;Alinhamento vertical: 0,05mm&#10;Torque do parafuso de fixação: 45Nm"></textarea>
+    <button class="add-btn" id="btn-salvar-nota" type="button" style="margin-top:8px;">Salvar nota</button>
+    <p class="empty-hint" id="nota-status" style="padding:6px 0 0;"></p>
   </div>
 </div>
 
@@ -489,7 +494,8 @@ async function salvarNuvem(){
     await dbFirestore.runTransaction(async (transacao) => {
       const snap = await transacao.get(nuvemRef());
       let entriesFinal = entries, leiturasFinal = leituras, leiturasFuelFinal = leiturasFuel,
-          leiturasOleoFinal = leiturasOleo, manutFinal = manutencoesDiarias, servicosFinal = servicosDiarios;
+          leiturasOleoFinal = leiturasOleo, manutFinal = manutencoesDiarias, servicosFinal = servicosDiarios,
+          notasFinal = notasEquipamento;
 
       if(snap.exists){
         const remoto = snap.data();
@@ -521,16 +527,20 @@ async function salvarNuvem(){
           }
         });
         servicosFinal = servicosMesclado;
+
+        notasFinal = Object.assign({}, remoto.notasEquipamento || {}, notasEquipamento || {});
       }
 
       transacao.set(nuvemRef(), {
         entries: entriesFinal, leituras: leiturasFinal, leiturasFuel: leiturasFuelFinal,
         leiturasOleo: leiturasOleoFinal, manutencoesDiarias: manutFinal, servicosDiarios: servicosFinal,
+        notasEquipamento: notasFinal,
         atualizadoEm: new Date().toISOString()
       });
 
       entries = entriesFinal; leituras = leiturasFinal; leiturasFuel = leiturasFuelFinal;
       leiturasOleo = leiturasOleoFinal; manutencoesDiarias = manutFinal; servicosDiarios = servicosFinal;
+      notasEquipamento = notasFinal;
     });
     atualizarIndicadorNuvem(true);
     return true;
@@ -553,6 +563,7 @@ async function carregarNuvem(){
     if(dados.leiturasOleo) leiturasOleo = dados.leiturasOleo;
     if(dados.manutencoesDiarias) manutencoesDiarias = dados.manutencoesDiarias;
     if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios;
+    if(dados.notasEquipamento) notasEquipamento = dados.notasEquipamento;
     atualizarIndicadorNuvem(true);
     return true;
   }catch(e){
@@ -1292,6 +1303,7 @@ let leiturasFuel = {};
 let leiturasOleo = {};
 let manutencoesDiarias = {};
 let servicosDiarios = [];
+let notasEquipamento = {};
 let manutencaoRascunho = [];
 
 const PECAS_FLUIG_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQML-1Ba_-pg-cC-z2SwovE2stZ02Q3N_W9BaC2TUbQhbsROY0wjR5W9MdfIuRKYihK_fW_hTY3hOLu/pub?gid=0&single=true&output=csv';
@@ -1404,6 +1416,16 @@ async function carregarServicosDiarios(){
 async function salvarServicosDiarios(){
   try{ await localStorageSet('servicos_diarios_ahts', JSON.stringify(servicosDiarios)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar serviços diários:', e); return false; }
+}
+async function carregarNotasEquipamento(){
+  try{
+    const res = await localStorageGet('notas_equipamento_ahts');
+    notasEquipamento = res && res.value ? JSON.parse(res.value) : {};
+  }catch(e){ notasEquipamento = {}; }
+}
+async function salvarNotasEquipamento(){
+  try{ await localStorageSet('notas_equipamento_ahts', JSON.stringify(notasEquipamento)); salvarNuvem(); return true; }
+  catch(e){ console.error('Erro ao salvar notas do equipamento:', e); return false; }
 }
 async function carregarLeiturasOleo(){
   try{
@@ -2296,6 +2318,13 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
     const cardsBateria = SUBITENS_POR_EQUIP[EQUIP_ID_BATERIAS].map(s => renderCardVencimentoBateria(eqBateria.nome, s, diasRestantesTrocaBateria(s))).join('');
     vencimentoHtml += `<div class="section-title" style="margin-bottom:6px;font-size:12px;">Trocas de bateria (a cada ${INTERVALO_TROCA_BATERIA_ANOS} anos)</div><div class="lub-grid" style="margin-bottom:14px;">${cardsBateria}</div>`;
   }
+  const equiposComNota = equiposFiltro.filter(e => notasEquipamento[e.id]);
+  if(equiposComNota.length){
+    vencimentoHtml += equiposComNota.map(e => `<div class="pend-item" style="cursor:default;border-color:var(--accent);margin-bottom:8px;">
+      <div class="nome" style="color:var(--accent);">📌 Nota técnica — ${esc(e.nome)}</div>
+      <div style="white-space:pre-wrap;">${esc(notasEquipamento[e.id])}</div>
+    </div>`).join('');
+  }
 
   if(registros.length === 0){
     resultEl.innerHTML = vencimentoHtml + '<p class="empty-hint">Nenhum registro encontrado com esses filtros.</p>';
@@ -2883,6 +2912,7 @@ async function loadEntries(){
   await carregarManutencoesDiarias();
   await carregarServicosDiarios();
   await carregarLeiturasOleo();
+  await carregarNotasEquipamento();
   await carregarNuvem();
   mergeReportsSync(PRELOADED_REPORTS);
   if(entries.length){
@@ -3097,6 +3127,31 @@ async function importarRelatorios(novos){
   renderPendenciasAbertas();
   return adicionados;
 }
+
+document.getElementById('h-nota-equip').addEventListener('change', () => {
+  const nome = document.getElementById('h-nota-equip').value.trim();
+  const equip = ALL_EQUIP_ITEMS.find(eq => eq.nome === nome);
+  const status = document.getElementById('nota-status');
+  status.textContent = '';
+  if(!equip){ document.getElementById('h-nota-texto').value = ''; return; }
+  document.getElementById('h-nota-texto').value = notasEquipamento[equip.id] || '';
+});
+
+document.getElementById('btn-salvar-nota').addEventListener('click', async () => {
+  await initialLoadPromise;
+  const nome = document.getElementById('h-nota-equip').value.trim();
+  const status = document.getElementById('nota-status');
+  const equip = ALL_EQUIP_ITEMS.find(eq => eq.nome === nome);
+  if(!equip){ status.textContent = 'Escolha um equipamento válido da lista.'; return; }
+  const texto = document.getElementById('h-nota-texto').value.trim();
+  if(texto){
+    notasEquipamento[equip.id] = texto;
+  }else{
+    delete notasEquipamento[equip.id];
+  }
+  const ok = await salvarNotasEquipamento();
+  status.textContent = ok ? `Nota de ${equip.nome} salva.` : 'Erro ao salvar.';
+});
 
 document.getElementById('h-import-file').addEventListener('change', async (e) => {
   const file = e.target.files[0];
