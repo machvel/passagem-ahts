@@ -208,12 +208,15 @@
   .preview-actions .btn-ir-imprimir{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);}
   #preview-content{padding:24px;}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
 <div class="header">
   <h1><span class="dot"></span>Passagem de serviço</h1>
-  <div class="sub">AHTS BRAM POWER — sala de máquinas</div>
+  <div class="sub">AHTS BRAM POWER — versão offline</div>
+  <div id="indicador-nuvem" style="font-family:var(--mono);font-size:10.5px;margin-top:4px;color:var(--text-faint);">Conectando...</div>
 </div>
 
 <div id="alerta-vencimentos" style="display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;padding:10px 14px;margin:0 16px 12px;cursor:pointer;font-size:12.5px;color:#fff;"></div>
@@ -414,7 +417,7 @@
   </div>
 </div>
 
-<div class="share-note">dados visíveis para toda a equipe com acesso a este app</div>
+<div class="share-note">versão offline — dados salvos só neste navegador/dispositivo. Use o backup para levar para outro aparelho ou compartilhar com a equipe.</div>
 <div class="toast" id="toast"></div>
 <div id="print-area" style="display:none;"></div>
 
@@ -450,11 +453,141 @@
   }catch(e){}
 })();
 
+const firebaseConfig = {
+  apiKey: "AIzaSyC_bMAQrPBwBnSLMRTAuOvrxnZ8aKomrVc",
+  authDomain: "app-relatorio-fotografic-c8d7c.firebaseapp.com",
+  projectId: "app-relatorio-fotografic-c8d7c",
+  storageBucket: "app-relatorio-fotografic-c8d7c.firebasestorage.app",
+  messagingSenderId: "506734137526",
+  appId: "1:506734137526:web:caca376b0334c321519617"
+};
+let dbFirestore = null, firebaseDisponivel = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  dbFirestore = firebase.firestore();
+  firebaseDisponivel = true;
+}catch(e){ console.error('Erro ao iniciar Firebase:', e); firebaseDisponivel = false; }
+
+function nuvemRef(){ return dbFirestore.collection('passagem_ahts').doc('dados'); }
+
+function mesclarLeiturasPorData(local, remoto){
+  const resultado = {};
+  Object.keys(remoto || {}).forEach(id => { resultado[id] = (remoto[id]||[]).slice(); });
+  Object.keys(local || {}).forEach(id => {
+    if(!resultado[id]) resultado[id] = [];
+    (local[id]||[]).forEach(l => {
+      const idx = resultado[id].findIndex(x => x.data === l.data);
+      if(idx >= 0) resultado[id][idx] = l; else resultado[id].push(l);
+    });
+  });
+  return resultado;
+}
+
+async function salvarNuvem(){
+  if(!firebaseDisponivel) return false;
+  try{
+    await dbFirestore.runTransaction(async (transacao) => {
+      const snap = await transacao.get(nuvemRef());
+      let entriesFinal = entries, leiturasFinal = leituras, leiturasFuelFinal = leiturasFuel,
+          leiturasOleoFinal = leiturasOleo, manutFinal = manutencoesDiarias, servicosFinal = servicosDiarios;
+
+      if(snap.exists){
+        const remoto = snap.data();
+
+        const entriesPorId = {};
+        (remoto.entries || []).forEach(e => { if(e && e.id) entriesPorId[e.id] = e; });
+        (entries || []).forEach(e => { if(e && e.id) entriesPorId[e.id] = e; });
+        entriesFinal = Object.values(entriesPorId);
+
+        leiturasFinal = mesclarLeiturasPorData(leituras, remoto.leituras);
+        leiturasFuelFinal = mesclarLeiturasPorData(leiturasFuel, remoto.leiturasFuel);
+        leiturasOleoFinal = mesclarLeiturasPorData(leiturasOleo, remoto.leiturasOleo);
+
+        const manutMesclado = {};
+        Object.keys(remoto.manutencoesDiarias || {}).forEach(id => { manutMesclado[id] = (remoto.manutencoesDiarias[id]||[]).slice(); });
+        Object.keys(manutencoesDiarias || {}).forEach(id => {
+          if(!manutMesclado[id]) manutMesclado[id] = [];
+          (manutencoesDiarias[id]||[]).forEach(m => {
+            const idx = manutMesclado[id].findIndex(x => x.id === m.id);
+            if(idx >= 0) manutMesclado[id][idx] = m; else manutMesclado[id].push(m);
+          });
+        });
+        manutFinal = manutMesclado;
+
+        const servicosMesclado = (remoto.servicosDiarios || []).slice();
+        (servicosDiarios || []).forEach(s => {
+          if(!servicosMesclado.some(x => x.data === s.data && x.tipo === s.tipo && x.texto === s.texto)){
+            servicosMesclado.push(s);
+          }
+        });
+        servicosFinal = servicosMesclado;
+      }
+
+      transacao.set(nuvemRef(), {
+        entries: entriesFinal, leituras: leiturasFinal, leiturasFuel: leiturasFuelFinal,
+        leiturasOleo: leiturasOleoFinal, manutencoesDiarias: manutFinal, servicosDiarios: servicosFinal,
+        atualizadoEm: new Date().toISOString()
+      });
+
+      entries = entriesFinal; leituras = leiturasFinal; leiturasFuel = leiturasFuelFinal;
+      leiturasOleo = leiturasOleoFinal; manutencoesDiarias = manutFinal; servicosDiarios = servicosFinal;
+    });
+    atualizarIndicadorNuvem(true);
+    return true;
+  }catch(e){
+    console.error('Erro ao salvar na nuvem:', e);
+    atualizarIndicadorNuvem(false);
+    return false;
+  }
+}
+
+async function carregarNuvem(){
+  if(!firebaseDisponivel) return false;
+  try{
+    const snap = await nuvemRef().get();
+    if(!snap.exists) return false;
+    const dados = snap.data();
+    if(dados.entries) entries = dados.entries;
+    if(dados.leituras) leituras = dados.leituras;
+    if(dados.leiturasFuel) leiturasFuel = dados.leiturasFuel;
+    if(dados.leiturasOleo) leiturasOleo = dados.leiturasOleo;
+    if(dados.manutencoesDiarias) manutencoesDiarias = dados.manutencoesDiarias;
+    if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios;
+    atualizarIndicadorNuvem(true);
+    return true;
+  }catch(e){
+    console.error('Erro ao carregar da nuvem:', e);
+    atualizarIndicadorNuvem(false);
+    return false;
+  }
+}
+
+function atualizarIndicadorNuvem(ok){
+  const el = document.getElementById('indicador-nuvem');
+  if(!el) return;
+  el.textContent = ok ? '☁ Sincronizado' : '⚠ Sem conexão com a nuvem';
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+
 const STATUS = [
   {key:'operacional', label:'Operacional'},
   {key:'nao_operacional', label:'Ñ operacional'},
   {key:'atencao', label:'Atenção'}
 ];
+
+
+async function localStorageGet(key){
+  try{
+    const v = localStorage.getItem('ahts_'+key);
+    return v != null ? {key, value: v} : null;
+  }catch(e){ return null; }
+}
+async function localStorageSet(key, value){
+  try{
+    localStorage.setItem('ahts_'+key, value);
+    return {key, value};
+  }catch(e){ throw e; }
+}
 
 const SECOES = [
   {key:'principais', titulo:'Motores principais', itens:[
@@ -972,7 +1105,6 @@ function renderRecorrentes(){
     c.appendChild(chip);
   });
 }
-
 function getUltimoRelatorio(){
   if(!entries.length) return null;
   return [...entries].sort((a,b) => reportDateKey(b).localeCompare(reportDateKey(a)))[0];
@@ -1109,7 +1241,7 @@ document.getElementById('btn-colar-tasks').addEventListener('click', () => {
       codigo = (partes[0] || '').trim();
       descricao = (partes.slice(1).join(' - ') || '').trim();
     }
-    if(i === 0 && !/\d/.test(codigo)){ ignorados++; return; } // provável linha de cabeçalho do Excel
+    if(i === 0 && !/\d/.test(codigo)){ ignorados++; return; }
     if(!codigo || existentes.has(codigo)){ ignorados++; return; }
     tasks.push({codigo, descricao});
     existentes.add(codigo);
@@ -1244,45 +1376,44 @@ function getUltimaLeituraOleo(itId){
 
 async function carregarLeiturasFuel(){
   try{
-    const res = await window.storage.get('leituras_fuel_ahts', true);
+    const res = await localStorageGet('leituras_fuel_ahts');
     leiturasFuel = res && res.value ? JSON.parse(res.value) : {};
   }catch(e){ leiturasFuel = {}; }
 }
 async function salvarLeiturasFuel(){
-  try{ await window.storage.set('leituras_fuel_ahts', JSON.stringify(leiturasFuel), true); return true; }
+  try{ await localStorageSet('leituras_fuel_ahts', JSON.stringify(leiturasFuel)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar leituras de fuel:', e); return false; }
-}
-
-async function carregarLeiturasOleo(){
-  try{
-    const res = await window.storage.get('leituras_oleo_ahts', true);
-    leiturasOleo = res && res.value ? JSON.parse(res.value) : {};
-  }catch(e){ leiturasOleo = {}; }
-}
-async function salvarLeiturasOleo(){
-  try{ await window.storage.set('leituras_oleo_ahts', JSON.stringify(leiturasOleo), true); return true; }
-  catch(e){ console.error('Erro ao salvar leituras de óleo:', e); return false; }
 }
 
 async function carregarManutencoesDiarias(){
   try{
-    const res = await window.storage.get('manutencoes_diarias_ahts', true);
+    const res = await localStorageGet('manutencoes_diarias_ahts');
     manutencoesDiarias = res && res.value ? JSON.parse(res.value) : {};
   }catch(e){ manutencoesDiarias = {}; }
 }
 async function salvarManutencoesDiarias(){
-  try{ await window.storage.set('manutencoes_diarias_ahts', JSON.stringify(manutencoesDiarias), true); return true; }
+  try{ await localStorageSet('manutencoes_diarias_ahts', JSON.stringify(manutencoesDiarias)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar manutenções diárias:', e); return false; }
 }
 async function carregarServicosDiarios(){
   try{
-    const res = await window.storage.get('servicos_diarios_ahts', true);
+    const res = await localStorageGet('servicos_diarios_ahts');
     servicosDiarios = res && res.value ? JSON.parse(res.value) : [];
   }catch(e){ servicosDiarios = []; }
 }
 async function salvarServicosDiarios(){
-  try{ await window.storage.set('servicos_diarios_ahts', JSON.stringify(servicosDiarios), true); return true; }
+  try{ await localStorageSet('servicos_diarios_ahts', JSON.stringify(servicosDiarios)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar serviços diários:', e); return false; }
+}
+async function carregarLeiturasOleo(){
+  try{
+    const res = await localStorageGet('leituras_oleo_ahts');
+    leiturasOleo = res && res.value ? JSON.parse(res.value) : {};
+  }catch(e){ leiturasOleo = {}; }
+}
+async function salvarLeiturasOleo(){
+  try{ await localStorageSet('leituras_oleo_ahts', JSON.stringify(leiturasOleo)); salvarNuvem(); return true; }
+  catch(e){ console.error('Erro ao salvar leituras de óleo:', e); return false; }
 }
 
 function renderManutencaoDraft(){
@@ -1423,13 +1554,8 @@ function renderManutencaoDraft(){
       const idfluigInput = row.querySelector('.inp-idfluig');
       const idfluigHint = row.querySelector('.idfluig-hint');
       function atualizarHintPeca(){
-        const ids = (idfluigInput.value || '').split(',').map(s => s.trim()).filter(Boolean);
-        if(!ids.length){ idfluigHint.textContent = ''; return; }
-        const texto = ids.map(id => {
-          const nome = pecasFluigMap[id.toUpperCase()];
-          return nome ? `${id} — ${nome}` : `${id} (não encontrada)`;
-        }).join(' · ');
-        idfluigHint.textContent = 'Peça(s): ' + texto;
+        const texto = nomesPecasFluig(idfluigInput.value);
+        idfluigHint.textContent = texto ? ('Peça(s): ' + texto) : '';
       }
       idfluigInput.addEventListener('input', e => { item.idFluig = e.target.value; atualizarHintPeca(); });
       atualizarHintPeca();
@@ -1539,13 +1665,13 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
 
 async function carregarLeituras(){
   try{
-    const res = await window.storage.get('leituras_ahts', true);
+    const res = await localStorageGet('leituras_ahts');
     leituras = res && res.value ? JSON.parse(res.value) : {};
   }catch(e){ leituras = {}; }
 }
 
 async function salvarLeituras(){
-  try{ await window.storage.set('leituras_ahts', JSON.stringify(leituras), true); return true; }
+  try{ await localStorageSet('leituras_ahts', JSON.stringify(leituras)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar leituras de horímetro:', e); return false; }
 }
 
@@ -2380,8 +2506,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('tab-novo').style.display = tab.dataset.tab === 'novo' ? 'block' : 'none';
     document.getElementById('tab-diario').style.display = tab.dataset.tab === 'diario' ? 'block' : 'none';
-    document.getElementById('tab-pendencias').style.display = tab.dataset.tab === 'pendencias' ? 'block' : 'none';
     document.getElementById('tab-historico').style.display = tab.dataset.tab === 'historico' ? 'block' : 'none';
+    document.getElementById('tab-pendencias').style.display = tab.dataset.tab === 'pendencias' ? 'block' : 'none';
     document.getElementById('tab-ferramentas').style.display = tab.dataset.tab === 'ferramentas' ? 'block' : 'none';
     if(tab.dataset.tab === 'historico') renderHistorico();
     if(tab.dataset.tab === 'diario'){ renderDiario(); renderEstatisticas(); renderProximasManutencoes(); carregarPecasFluig(); }
@@ -2748,7 +2874,7 @@ function mergeReportsSync(novos){
 
 async function loadEntries(){
   try{
-    const res = await window.storage.get('passagens_ahts', true);
+    const res = await localStorageGet('passagens_ahts');
     entries = res && res.value ? JSON.parse(res.value) : [];
   }catch(e){ entries = []; }
   await carregarLeituras();
@@ -2757,11 +2883,13 @@ async function loadEntries(){
   await carregarManutencoesDiarias();
   await carregarServicosDiarios();
   await carregarLeiturasOleo();
+  await carregarNuvem();
   mergeReportsSync(PRELOADED_REPORTS);
   if(entries.length){
     recomputeFiltrosInfoAll();
-    try{ await window.storage.set('passagens_ahts', JSON.stringify(entries), true); }catch(e){}
+    try{ await localStorageSet('passagens_ahts', JSON.stringify(entries)); }catch(e){}
   }
+  await salvarNuvem();
   SECOES.forEach(sec => sec.itens.forEach(it => {
     const info = getEstadoMaisRecente(it.id);
     if(!info) return;
@@ -2830,7 +2958,8 @@ document.getElementById('btn-salvar').addEventListener('click', async () => {
       entries.push(report);
     }
     recomputeFiltrosInfoAll();
-    await window.storage.set('passagens_ahts', JSON.stringify(entries), true);
+    await localStorageSet('passagens_ahts', JSON.stringify(entries));
+    salvarNuvem();
     showToast(idxExistente >= 0 ? 'Passagem atualizada' : 'Passagem de serviço salva');
     formDirty = false;
     document.querySelector('.tab[data-tab="historico"]').click();
@@ -2945,7 +3074,8 @@ function renderHistorico(){
       if(!confirm(`Excluir a passagem de ${fmtDate(r.header.inicio)} a ${fmtDate(r.header.fim)}? Essa ação não pode ser desfeita.`)) return;
       entries = entries.filter(x => x.id !== r.id);
       recomputeFiltrosInfoAll();
-      await window.storage.set('passagens_ahts', JSON.stringify(entries), true);
+      await localStorageSet('passagens_ahts', JSON.stringify(entries));
+      salvarNuvem();
       motorCards.forEach(c => { if(c.updateFiltroFields) c.updateFiltroFields(); });
       renderRecorrentes();
       renderPendenciasAbertas();
@@ -2960,7 +3090,8 @@ async function importarRelatorios(novos){
   await initialLoadPromise;
   const adicionados = mergeReportsSync(novos);
   if(adicionados > 0) recomputeFiltrosInfoAll();
-  await window.storage.set('passagens_ahts', JSON.stringify(entries), true);
+  await localStorageSet('passagens_ahts', JSON.stringify(entries));
+  salvarNuvem();
   motorCards.forEach(c => { if(c.updateFiltroFields) c.updateFiltroFields(); });
   renderRecorrentes();
   renderPendenciasAbertas();
