@@ -217,6 +217,7 @@
   <h1><span class="dot"></span>Passagem de serviço</h1>
   <div class="sub">AHTS BRAM POWER — versão offline</div>
   <div id="indicador-nuvem" style="font-family:var(--mono);font-size:10.5px;margin-top:4px;color:var(--text-faint);">Conectando...</div>
+  <div id="indicador-tamanho" style="font-family:var(--mono);font-size:10.5px;color:var(--text-faint);"></div>
 </div>
 
 <div id="alerta-vencimentos" style="display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;padding:10px 14px;margin:0 16px 12px;cursor:pointer;font-size:12.5px;color:#fff;"></div>
@@ -412,6 +413,10 @@
   <div class="panel" style="margin-top:14px;">
     <div class="section-title" style="margin-bottom:8px;">Restaurar de um arquivo de backup</div>
     <p class="empty-hint" style="padding:0 0 8px;">Suas 6 passagens antigas (07/01/2026 a 19/08/2026) já entram automaticamente no histórico. Use isto só se precisar restaurar um backup exportado.</p>
+    <input type="file" id="h-import-file" accept=".json,application/json,text/plain,text/json" style="padding:8px;">
+    <p class="empty-hint" id="preload-status" style="padding:8px 0 0;"></p>
+  </div>
+
   <div class="panel" style="margin-top:14px;">
     <div class="section-title" style="margin-bottom:8px;">Notas técnicas do equipamento</div>
     <p class="empty-hint" style="padding:0 0 8px;">Guarde referências que não mudam com frequência: folga axial, medidas de alinhamento, torques, números de série, etc. Não aparece na passagem de serviço — é só uma consulta rápida.</p>
@@ -543,6 +548,7 @@ async function salvarNuvem(){
       notasEquipamento = notasFinal;
     });
     atualizarIndicadorNuvem(true);
+    atualizarIndicadorTamanho();
     return true;
   }catch(e){
     console.error('Erro ao salvar na nuvem:', e);
@@ -552,10 +558,17 @@ async function salvarNuvem(){
 }
 
 async function carregarNuvem(){
-  if(!firebaseDisponivel) return false;
+  if(!firebaseDisponivel){
+    atualizarIndicadorNuvem(false);
+    return false;
+  }
   try{
-    const snap = await nuvemRef().get();
-    if(!snap.exists) return false;
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo esgotado ao conectar com a nuvem')), 15000));
+    const snap = await Promise.race([nuvemRef().get(), timeoutPromise]);
+    if(!snap.exists){
+      atualizarIndicadorNuvem(false);
+      return false;
+    }
     const dados = snap.data();
     if(dados.entries) entries = dados.entries;
     if(dados.leituras) leituras = dados.leituras;
@@ -565,6 +578,7 @@ async function carregarNuvem(){
     if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios;
     if(dados.notasEquipamento) notasEquipamento = dados.notasEquipamento;
     atualizarIndicadorNuvem(true);
+    atualizarIndicadorTamanho();
     return true;
   }catch(e){
     console.error('Erro ao carregar da nuvem:', e);
@@ -578,6 +592,29 @@ function atualizarIndicadorNuvem(ok){
   if(!el) return;
   el.textContent = ok ? '☁ Sincronizado' : '⚠ Sem conexão com a nuvem';
   el.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+
+const LIMITE_FIRESTORE_BYTES = 1048576;
+
+function atualizarIndicadorTamanho(){
+  const el = document.getElementById('indicador-tamanho');
+  if(!el) return;
+  try{
+    const payload = JSON.stringify({
+      entries, leituras, leiturasFuel, leiturasOleo, manutencoesDiarias, servicosDiarios, notasEquipamento
+    });
+    const bytes = new Blob([payload]).size;
+    const kb = (bytes / 1024).toFixed(0);
+    const limiteKb = (LIMITE_FIRESTORE_BYTES / 1024).toFixed(0);
+    const pct = (bytes / LIMITE_FIRESTORE_BYTES) * 100;
+    let cor = 'var(--text-faint)';
+    if(pct >= 90) cor = 'var(--red)';
+    else if(pct >= 70) cor = 'var(--amber)';
+    el.textContent = `Uso de dados: ${kb}KB / ${limiteKb}KB (${pct.toFixed(0)}%)`;
+    el.style.color = cor;
+  }catch(e){
+    el.textContent = '';
+  }
 }
 
 const STATUS = [
@@ -2915,6 +2952,7 @@ async function loadEntries(){
   await carregarNotasEquipamento();
   await carregarNuvem();
   mergeReportsSync(PRELOADED_REPORTS);
+  atualizarIndicadorTamanho();
   if(entries.length){
     recomputeFiltrosInfoAll();
     try{ await localStorageSet('passagens_ahts', JSON.stringify(entries)); }catch(e){}
