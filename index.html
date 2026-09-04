@@ -1684,12 +1684,13 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
   let manutAplicadas = 0;
   ALL_EQUIP_ITEMS.forEach(eq => {
     const diarias = getManutencoesDiariasNoPeriodo(eq.id, inicio, fim);
-    if(!diarias.length) return;
-    const diariasPendentes = diarias.filter(manutencaoEhPendente);
+    const todasDiarias = manutencoesDiarias[eq.id] || [];
+    const diariasPendentes = todasDiarias.filter(manutencaoEhPendente);
     const diariasObs = diarias.filter(m => !manutencaoEhPendente(m));
+    if(!diarias.length && !diariasPendentes.length) return;
     const st = equipState[eq.id];
 
-    if(diarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional')){
+    if(todasDiarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional' && m.corrigido === false)){
       st.status = 'nao_operacional';
     }
 
@@ -2248,6 +2249,9 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   manutencaoRascunho = [];
   renderManutencaoDraft();
   renderPendenciasDiarioTab();
+  if(document.getElementById('resultado-consulta').innerHTML.trim() !== ''){
+    document.getElementById('btn-consultar-diario').click();
+  }
   if(!okManut || !okServico){
     status.textContent = 'Erro ao salvar — os dados podem NÃO ter sido gravados. Veja o Console e tente novamente.';
     showToast('Erro ao salvar, tente de novo');
@@ -2387,6 +2391,7 @@ async function marcarComoCorrigido(equipId, recId, correcao){
   if(!registro) return;
   registro.corrigido = true;
   registro.correcao = (correcao || '').trim();
+  registro.statusEquip = 'operacional';
   await salvarManutencoesDiarias();
   showToast('Marcado como corrigido');
   renderPendenciasDiarioTab();
@@ -2616,7 +2621,8 @@ function buildReport(){
   SECOES.forEach(sec => sec.itens.forEach(it => {
     const st = equipState[it.id];
     const diarias = getManutencoesDiariasNoPeriodo(it.id, header.inicio, header.fim);
-    const diariasPendentes = diarias.filter(manutencaoEhPendente);
+    const todasDiarias = manutencoesDiarias[it.id] || [];
+    const diariasPendentes = todasDiarias.filter(manutencaoEhPendente);
     const diariasObs = diarias.filter(m => !manutencaoEhPendente(m));
 
     let obsFinal = st.obs.trim();
@@ -2643,7 +2649,7 @@ function buildReport(){
       });
     }
 
-    const statusFinal = diarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional') ? 'nao_operacional' : st.status;
+    const statusFinal = todasDiarias.some(m => m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional' && m.corrigido === false) ? 'nao_operacional' : st.status;
 
     equip[it.id] = {
       nome: it.nome, secao: sec.titulo, tipo: it.tipo, status: statusFinal,
