@@ -1090,14 +1090,17 @@ function secaoDoEquip(itemId){
 function equipSelectorHtml(classPrefix, categoriaAtual, itemIdAtual, permiteVazio){
   const opcoesCategoria = SECOES.map(sec => `<option value="${escA(sec.key)}" ${sec.key===categoriaAtual?'selected':''}>${esc(sec.titulo)}</option>`).join('');
   const secaoAtual = SECOES.find(s => s.key === categoriaAtual);
-  const opcoesItem = secaoAtual ? secaoAtual.itens.map(it => `<option value="${escA(it.id)}" ${it.id===itemIdAtual?'selected':''}>${esc(it.nome)}</option>`).join('') : '';
-  return `<select class="${classPrefix}-categoria" style="flex:1 1 140px;">
+  const botoesItem = secaoAtual ? secaoAtual.itens.map(it => {
+    const ativo = it.id === itemIdAtual;
+    return `<div class="${classPrefix}-item-btn" data-item-id="${escA(it.id)}" style="background:${ativo ? 'var(--accent-dim)' : 'var(--panel-2)'};border:1px solid ${ativo ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 6px;text-align:center;color:${ativo ? 'var(--accent)' : 'var(--text-dim)'};font-size:11px;font-weight:${ativo ? '600' : '400'};cursor:pointer;">${esc(it.nome)}</div>`;
+  }).join('') : '';
+  return `<select class="${classPrefix}-categoria" style="flex:1 1 100%;">
       <option value="">${permiteVazio ? 'Nenhum (geral)' : 'Categoria...'}</option>
       ${opcoesCategoria}
     </select>
-    <select class="${classPrefix}-item" style="flex:1 1 160px;" ${!secaoAtual ? 'disabled' : ''}>
-      ${secaoAtual ? opcoesItem : '<option value="">Escolha a categoria</option>'}
-    </select>`;
+    <div class="${classPrefix}-item-grid" style="flex:1 1 100%;display:${secaoAtual ? 'grid' : 'none'};grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-top:6px;">
+      ${botoesItem}
+    </div>`;
 }
 
 function servicoTexto(item){ return typeof item === 'string' ? item : (item.texto || ''); }
@@ -1643,10 +1646,12 @@ function renderManutencaoDraft(){
         item.itemId = '';
         renderManutencaoDraft();
       });
-      const itemSelect = row.querySelector('.sel-equip-item');
-      if(itemSelect && !itemSelect.disabled){
-        itemSelect.addEventListener('change', e => {
-          item.itemId = e.target.value;
+      const itemGrid = row.querySelector('.sel-equip-item-grid');
+      if(itemGrid){
+        itemGrid.addEventListener('click', e => {
+          const btn = e.target.closest('[data-item-id]');
+          if(!btn) return;
+          item.itemId = btn.dataset.itemId;
           renderManutencaoDraft();
         });
       }
@@ -1660,9 +1665,14 @@ function renderManutencaoDraft(){
         item.itemId = '';
         renderManutencaoDraft();
       });
-      const servicoItemSelect = row.querySelector('.sel-servico-equip-item');
-      if(servicoItemSelect && !servicoItemSelect.disabled){
-        servicoItemSelect.addEventListener('change', e => { item.itemId = e.target.value; });
+      const servicoItemGrid = row.querySelector('.sel-servico-equip-item-grid');
+      if(servicoItemGrid){
+        servicoItemGrid.addEventListener('click', e => {
+          const btn = e.target.closest('[data-item-id]');
+          if(!btn) return;
+          item.itemId = btn.dataset.itemId;
+          renderManutencaoDraft();
+        });
       }
     }else if(usaSubItens){
       if(!item.subItens) item.subItens = [];
