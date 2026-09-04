@@ -500,14 +500,19 @@ async function salvarNuvem(){
       const snap = await transacao.get(nuvemRef());
       let entriesFinal = entries, leiturasFinal = leituras, leiturasFuelFinal = leiturasFuel,
           leiturasOleoFinal = leiturasOleo, manutFinal = manutencoesDiarias, servicosFinal = servicosDiarios,
-          notasFinal = notasEquipamento;
+          notasFinal = notasEquipamento, idsExcluidosFinal = idsExcluidos;
 
       if(snap.exists){
         const remoto = snap.data();
 
+        idsExcluidosFinal = {
+          entries: Array.from(new Set([...(remoto.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
+          manutencoes: Array.from(new Set([...(remoto.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])]))
+        };
+
         const entriesPorId = {};
-        (remoto.entries || []).forEach(e => { if(e && e.id) entriesPorId[e.id] = e; });
-        (entries || []).forEach(e => { if(e && e.id) entriesPorId[e.id] = e; });
+        (remoto.entries || []).forEach(e => { if(e && e.id && !idsExcluidosFinal.entries.includes(e.id)) entriesPorId[e.id] = e; });
+        (entries || []).forEach(e => { if(e && e.id && !idsExcluidosFinal.entries.includes(e.id)) entriesPorId[e.id] = e; });
         entriesFinal = Object.values(entriesPorId);
 
         leiturasFinal = mesclarLeiturasPorData(leituras, remoto.leituras);
@@ -515,10 +520,13 @@ async function salvarNuvem(){
         leiturasOleoFinal = mesclarLeiturasPorData(leiturasOleo, remoto.leiturasOleo);
 
         const manutMesclado = {};
-        Object.keys(remoto.manutencoesDiarias || {}).forEach(id => { manutMesclado[id] = (remoto.manutencoesDiarias[id]||[]).slice(); });
+        Object.keys(remoto.manutencoesDiarias || {}).forEach(id => {
+          manutMesclado[id] = (remoto.manutencoesDiarias[id]||[]).filter(m => !idsExcluidosFinal.manutencoes.includes(m.id));
+        });
         Object.keys(manutencoesDiarias || {}).forEach(id => {
           if(!manutMesclado[id]) manutMesclado[id] = [];
           (manutencoesDiarias[id]||[]).forEach(m => {
+            if(idsExcluidosFinal.manutencoes.includes(m.id)) return;
             const idx = manutMesclado[id].findIndex(x => x.id === m.id);
             if(idx >= 0) manutMesclado[id][idx] = m; else manutMesclado[id].push(m);
           });
@@ -539,13 +547,13 @@ async function salvarNuvem(){
       transacao.set(nuvemRef(), {
         entries: entriesFinal, leituras: leiturasFinal, leiturasFuel: leiturasFuelFinal,
         leiturasOleo: leiturasOleoFinal, manutencoesDiarias: manutFinal, servicosDiarios: servicosFinal,
-        notasEquipamento: notasFinal,
+        notasEquipamento: notasFinal, idsExcluidos: idsExcluidosFinal,
         atualizadoEm: new Date().toISOString()
       });
 
       entries = entriesFinal; leituras = leiturasFinal; leiturasFuel = leiturasFuelFinal;
       leiturasOleo = leiturasOleoFinal; manutencoesDiarias = manutFinal; servicosDiarios = servicosFinal;
-      notasEquipamento = notasFinal;
+      notasEquipamento = notasFinal; idsExcluidos = idsExcluidosFinal;
     });
     atualizarIndicadorNuvem(true);
     atualizarIndicadorTamanho();
@@ -570,11 +578,21 @@ async function carregarNuvem(){
       return false;
     }
     const dados = snap.data();
-    if(dados.entries) entries = dados.entries;
+    const idsExcluidosMesclado = {
+      entries: Array.from(new Set([...(dados.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
+      manutencoes: Array.from(new Set([...(dados.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])]))
+    };
+    idsExcluidos = idsExcluidosMesclado;
+    if(dados.entries) entries = dados.entries.filter(e => !idsExcluidosMesclado.entries.includes(e.id));
     if(dados.leituras) leituras = dados.leituras;
     if(dados.leiturasFuel) leiturasFuel = dados.leiturasFuel;
     if(dados.leiturasOleo) leiturasOleo = dados.leiturasOleo;
-    if(dados.manutencoesDiarias) manutencoesDiarias = dados.manutencoesDiarias;
+    if(dados.manutencoesDiarias){
+      manutencoesDiarias = {};
+      Object.keys(dados.manutencoesDiarias).forEach(id => {
+        manutencoesDiarias[id] = (dados.manutencoesDiarias[id]||[]).filter(m => !idsExcluidosMesclado.manutencoes.includes(m.id));
+      });
+    }
     if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios;
     if(dados.notasEquipamento) notasEquipamento = dados.notasEquipamento;
     atualizarIndicadorNuvem(true);
@@ -1341,6 +1359,7 @@ let leiturasOleo = {};
 let manutencoesDiarias = {};
 let servicosDiarios = [];
 let notasEquipamento = {};
+let idsExcluidos = { entries: [], manutencoes: [] };
 let manutencaoRascunho = [];
 
 const PECAS_FLUIG_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQML-1Ba_-pg-cC-z2SwovE2stZ02Q3N_W9BaC2TUbQhbsROY0wjR5W9MdfIuRKYihK_fW_hTY3hOLu/pub?gid=0&single=true&output=csv';
@@ -1463,6 +1482,18 @@ async function carregarNotasEquipamento(){
 async function salvarNotasEquipamento(){
   try{ await localStorageSet('notas_equipamento_ahts', JSON.stringify(notasEquipamento)); salvarNuvem(); return true; }
   catch(e){ console.error('Erro ao salvar notas do equipamento:', e); return false; }
+}
+async function carregarIdsExcluidos(){
+  try{
+    const res = await localStorageGet('ids_excluidos_ahts');
+    idsExcluidos = res && res.value ? JSON.parse(res.value) : { entries: [], manutencoes: [] };
+  }catch(e){ idsExcluidos = { entries: [], manutencoes: [] }; }
+}
+async function salvarIdExcluido(tipo, id){
+  if(!idsExcluidos[tipo]) idsExcluidos[tipo] = [];
+  if(!idsExcluidos[tipo].includes(id)) idsExcluidos[tipo].push(id);
+  try{ await localStorageSet('ids_excluidos_ahts', JSON.stringify(idsExcluidos)); }
+  catch(e){ console.error('Erro ao salvar lista de exclusões:', e); }
 }
 async function carregarLeiturasOleo(){
   try{
@@ -2529,6 +2560,7 @@ async function excluirManutencao(equipId, recId){
   const descricaoRegistro = descricaoManut(registro);
   if(!confirm(`Excluir esse registro de ${nomeEquip} (${fmtDate(registro.data)})?\n"${descricaoRegistro}"\n\nEssa ação não pode ser desfeita.`)) return false;
   manutencoesDiarias[equipId] = arr.filter(m => m.id !== recId);
+  await salvarIdExcluido('manutencoes', recId);
   await salvarManutencoesDiarias();
   showToast('Registro excluído');
   renderPendenciasDiarioTab();
@@ -2956,6 +2988,7 @@ async function loadEntries(){
   await carregarServicosDiarios();
   await carregarLeiturasOleo();
   await carregarNotasEquipamento();
+  await carregarIdsExcluidos();
   await carregarNuvem();
   mergeReportsSync(PRELOADED_REPORTS);
   atualizarIndicadorTamanho();
@@ -3147,6 +3180,7 @@ function renderHistorico(){
       e.stopPropagation();
       if(!confirm(`Excluir a passagem de ${fmtDate(r.header.inicio)} a ${fmtDate(r.header.fim)}? Essa ação não pode ser desfeita.`)) return;
       entries = entries.filter(x => x.id !== r.id);
+      await salvarIdExcluido('entries', r.id);
       recomputeFiltrosInfoAll();
       await localStorageSet('passagens_ahts', JSON.stringify(entries));
       salvarNuvem();
