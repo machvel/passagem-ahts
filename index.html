@@ -657,16 +657,16 @@ async function localStorageSet(key, value){
 
 const SECOES = [
   {key:'principais', titulo:'Motores principais', itens:[
-    {id:'me1', nome:'ME#1', tipo:'motor', horas:['1000H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']},
-    {id:'me2', nome:'ME#2', tipo:'motor', horas:['1000H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']},
-    {id:'me3', nome:'ME#3', tipo:'motor', horas:['1000H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']},
-    {id:'me4', nome:'ME#4', tipo:'motor', horas:['1000H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']}
+    {id:'me1', nome:'ME#1', tipo:'motor', horas:['1000H','1500H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']},
+    {id:'me2', nome:'ME#2', tipo:'motor', horas:['1000H','1500H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']},
+    {id:'me3', nome:'ME#3', tipo:'motor', horas:['1000H','1500H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']},
+    {id:'me4', nome:'ME#4', tipo:'motor', horas:['1000H','1500H','2000H','8000H','12.000H','20.000H','40.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário Superior','Troca Filtro Secundário Inferior']}
   ]},
   {key:'diesel', titulo:'Diesel geradores', itens:[
-    {id:'dg1', nome:'DG#1', tipo:'motor', horas:['250H','500H','2000H','5000H','8000H','20.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']},
-    {id:'dg2', nome:'DG#2', tipo:'motor', horas:['600H','2000H','6000H','12.500H','25.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']},
-    {id:'dg3', nome:'DG#3', tipo:'motor', horas:['600H','2000H','6000H','12.500H','25.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']},
-    {id:'dg4', nome:'DG#4', tipo:'motor', horas:['250H','500H','2000H','5000H','8000H','20.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']}
+    {id:'dg1', nome:'DG#1', tipo:'motor', horas:['250H','500H','1500H','2000H','5000H','8000H','20.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']},
+    {id:'dg2', nome:'DG#2', tipo:'motor', horas:['600H','1500H','2000H','6000H','12.500H','25.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']},
+    {id:'dg3', nome:'DG#3', tipo:'motor', horas:['600H','1500H','2000H','6000H','12.500H','25.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']},
+    {id:'dg4', nome:'DG#4', tipo:'motor', horas:['250H','500H','1500H','2000H','5000H','8000H','20.000H'], filtros:['Troca Filtro Racor','Troca Filtro Secundário']}
   ]},
   {key:'redutoras', titulo:'Redutoras', itens:[
     {id:'red_bb', nome:'Redutora BB', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
@@ -1584,11 +1584,15 @@ function renderManutencaoDraft(){
     }else if(usaSeletorPreventivo){
       const opcoes = [...equipSelecionado.horas, ...equipSelecionado.filtros, 'Outros'];
       campoDetalheHtml = `<div style="flex:1 1 100%;">
-        <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:3px;">Tipo de manutenção preventiva</label>
-        <select class="campo-detalhe" style="width:100%;">
-          ${opcoes.map(o => `<option value="${escA(o)}" ${o===item.manutTipo?'selected':''}>${esc(o)}</option>`).join('')}
-        </select>
-        ${item.manutTipo === 'Outros' ? `<input type="text" class="campo-outros" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="width:100%;margin-top:6px;">` : ''}
+        <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:6px;">Tipo de manutenção preventiva</label>
+        <div class="grid-preventiva" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-bottom:8px;">
+          ${opcoes.map(o => {
+            const ativo = o === item.manutTipo;
+            const apelido = APELIDO_INTERVALO[o];
+            return `<div class="btn-preventiva" data-manut-tipo="${escA(o)}" style="background:${ativo ? 'var(--accent-dim)' : 'var(--panel-2)'};border:1px solid ${ativo ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 6px;text-align:center;color:${ativo ? 'var(--accent)' : 'var(--text-dim)'};font-size:11px;font-weight:${ativo ? '600' : '400'};cursor:pointer;">${esc(o)}${apelido ? `<br><span style="font-size:9.5px;opacity:0.8;">(${esc(apelido)})</span>` : ''}</div>`;
+          }).join('')}
+        </div>
+        ${item.manutTipo === 'Outros' ? `<input type="text" class="campo-outros" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="width:100%;">` : ''}
       </div>`;
     }else{
       campoDetalheHtml = `<input type="text" class="campo-detalhe" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="flex:1 1 100%;">`;
@@ -1687,8 +1691,13 @@ function renderManutencaoDraft(){
       });
       row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
     }else if(usaSeletorPreventivo){
-      row.querySelector('.campo-detalhe').addEventListener('change', e => { item.manutTipo = e.target.value; renderManutencaoDraft(); });
       if(!item.manutTipo) item.manutTipo = [...equipSelecionado.horas, ...equipSelecionado.filtros][0];
+      row.querySelector('.grid-preventiva').addEventListener('click', e => {
+        const btn = e.target.closest('[data-manut-tipo]');
+        if(!btn) return;
+        item.manutTipo = btn.dataset.manutTipo;
+        renderManutencaoDraft();
+      });
       if(item.manutTipo === 'Outros'){
         const outrosInput = row.querySelector('.campo-outros');
         if(outrosInput) outrosInput.addEventListener('input', e => item.descricao = e.target.value);
@@ -2019,6 +2028,7 @@ const INTERVALO_FIXO = {
 };
 
 const APELIDO_INTERVALO = {
+  '1500H': 'Air Sap',
   '12.000H': 'Turbina',
   '20.000H': 'Top End',
   '40.000H': 'Overhaul',
