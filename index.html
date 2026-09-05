@@ -1083,6 +1083,15 @@ const SUBITENS_POR_EQUIP = {
   'ger_25': ['Principal','Tow BB','Tow BE','Sec. BB','Sec. BE']
 };
 
+function botaoDuplo(classPrefix, opcoes, valorAtual){
+  return `<div style="display:flex;flex-direction:column;gap:2px;height:32px;">
+    ${opcoes.map(o => {
+      const ativo = o.val === valorAtual;
+      return `<div class="${classPrefix}" data-val="${escA(o.val)}" style="flex:1;background:${ativo?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${ativo?'var(--accent)':'var(--border)'};border-radius:3px;color:${ativo?'var(--accent)':'var(--text-dim)'};font-size:8px;font-weight:${ativo?'600':'400'};text-align:center;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1.1;">${esc(o.label)}</div>`;
+    }).join('')}
+  </div>`;
+}
+
 function secaoDoEquip(itemId){
   return SECOES.find(sec => sec.itens.some(it => it.id === itemId));
 }
@@ -1603,14 +1612,12 @@ function renderManutencaoDraft(){
     let statusEquipHtml = '';
     let resultadoCbmHtml = '';
     if(usaCorrigido){
-      statusEquipHtml = `<select class="sel-status-equip" style="flex:0 0 150px;">
-        <option value="operacional" ${item.statusEquip !== 'nao_operacional' ? 'selected' : ''}>Operacional</option>
-        <option value="nao_operacional" ${item.statusEquip === 'nao_operacional' ? 'selected' : ''}>Não operacional</option>
-      </select>`;
-      corrigidoHtml = `<select class="sel-corrigido" style="flex:0 0 150px;">
-        <option value="nao" ${item.corrigido !== true ? 'selected' : ''}>Não corrigido</option>
-        <option value="sim" ${item.corrigido === true ? 'selected' : ''}>Corrigido</option>
-      </select>`;
+      statusEquipHtml = `<div style="flex:0 0 80px;">
+        ${botaoDuplo('btn-status-equip', [{val:'operacional', label:'Operacional'}, {val:'nao_operacional', label:'Ñ Operac.'}], item.statusEquip === 'nao_operacional' ? 'nao_operacional' : 'operacional')}
+      </div>`;
+      corrigidoHtml = `<div style="flex:0 0 80px;">
+        ${botaoDuplo('btn-corrigido', [{val:'nao', label:'Ñ Corrigido'}, {val:'sim', label:'Corrigido'}], item.corrigido === true ? 'sim' : 'nao')}
+      </div>`;
       idFluigHtml = `<div style="flex:1 1 160px;">
         <input type="text" class="inp-idfluig" placeholder="ID Fluig — separe por vírgula se for mais de uma" value="${escA(item.idFluig||'')}" style="width:100%;">
         <div class="idfluig-hint" style="font-size:10px;color:var(--text-faint);margin-top:3px;"></div>
@@ -1706,8 +1713,12 @@ function renderManutencaoDraft(){
       row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
     }
     if(usaCorrigido){
-      row.querySelector('.sel-corrigido').addEventListener('change', e => item.corrigido = e.target.value === 'sim');
-      row.querySelector('.sel-status-equip').addEventListener('change', e => item.statusEquip = e.target.value);
+      row.querySelectorAll('.btn-status-equip').forEach(btn => {
+        btn.addEventListener('click', () => { item.statusEquip = btn.dataset.val; renderManutencaoDraft(); });
+      });
+      row.querySelectorAll('.btn-corrigido').forEach(btn => {
+        btn.addEventListener('click', () => { item.corrigido = btn.dataset.val === 'sim'; renderManutencaoDraft(); });
+      });
       const idfluigInput = row.querySelector('.inp-idfluig');
       const idfluigHint = row.querySelector('.idfluig-hint');
       function atualizarHintPeca(){
