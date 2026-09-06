@@ -507,7 +507,8 @@ async function salvarNuvem(){
 
         idsExcluidosFinal = {
           entries: Array.from(new Set([...(remoto.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
-          manutencoes: Array.from(new Set([...(remoto.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])]))
+          manutencoes: Array.from(new Set([...(remoto.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])])),
+          servicos: Array.from(new Set([...(remoto.idsExcluidos?.servicos || []), ...(idsExcluidos.servicos || [])]))
         };
 
         const entriesPorId = {};
@@ -533,13 +534,17 @@ async function salvarNuvem(){
         });
         manutFinal = manutMesclado;
 
-        const servicosMesclado = (remoto.servicosDiarios || []).slice();
-        (servicosDiarios || []).forEach(s => {
-          if(!servicosMesclado.some(x => x.data === s.data && x.tipo === s.tipo && x.texto === s.texto)){
-            servicosMesclado.push(s);
-          }
+        const chaveServico = s => s.id || `${s.data}|${s.tipo}|${s.texto}|${s.itemId||''}`;
+        const servicosMesclado = {};
+        (remoto.servicosDiarios || []).forEach(s => {
+          if(s.id && idsExcluidosFinal.servicos.includes(s.id)) return;
+          servicosMesclado[chaveServico(s)] = s;
         });
-        servicosFinal = servicosMesclado;
+        (servicosDiarios || []).forEach(s => {
+          if(s.id && idsExcluidosFinal.servicos.includes(s.id)) return;
+          servicosMesclado[chaveServico(s)] = s;
+        });
+        servicosFinal = Object.values(servicosMesclado);
 
         notasFinal = Object.assign({}, remoto.notasEquipamento || {}, notasEquipamento || {});
       }
@@ -580,7 +585,8 @@ async function carregarNuvem(){
     const dados = snap.data();
     const idsExcluidosMesclado = {
       entries: Array.from(new Set([...(dados.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
-      manutencoes: Array.from(new Set([...(dados.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])]))
+      manutencoes: Array.from(new Set([...(dados.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])])),
+      servicos: Array.from(new Set([...(dados.idsExcluidos?.servicos || []), ...(idsExcluidos.servicos || [])]))
     };
     idsExcluidos = idsExcluidosMesclado;
     if(dados.entries) entries = dados.entries.filter(e => !idsExcluidosMesclado.entries.includes(e.id));
@@ -593,7 +599,7 @@ async function carregarNuvem(){
         manutencoesDiarias[id] = (dados.manutencoesDiarias[id]||[]).filter(m => !idsExcluidosMesclado.manutencoes.includes(m.id));
       });
     }
-    if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios;
+    if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios.filter(s => !s.id || !idsExcluidosMesclado.servicos.includes(s.id));
     if(dados.notasEquipamento) notasEquipamento = dados.notasEquipamento;
     atualizarIndicadorNuvem(true);
     atualizarIndicadorTamanho();
@@ -1390,7 +1396,7 @@ let leiturasOleo = {};
 let manutencoesDiarias = {};
 let servicosDiarios = [];
 let notasEquipamento = {};
-let idsExcluidos = { entries: [], manutencoes: [] };
+let idsExcluidos = { entries: [], manutencoes: [], servicos: [] };
 let manutencaoRascunho = [];
 
 const PECAS_FLUIG_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQML-1Ba_-pg-cC-z2SwovE2stZ02Q3N_W9BaC2TUbQhbsROY0wjR5W9MdfIuRKYihK_fW_hTY3hOLu/pub?gid=0&single=true&output=csv';
@@ -1517,8 +1523,8 @@ async function salvarNotasEquipamento(){
 async function carregarIdsExcluidos(){
   try{
     const res = await localStorageGet('ids_excluidos_ahts');
-    idsExcluidos = res && res.value ? JSON.parse(res.value) : { entries: [], manutencoes: [] };
-  }catch(e){ idsExcluidos = { entries: [], manutencoes: [] }; }
+    idsExcluidos = res && res.value ? JSON.parse(res.value) : { entries: [], manutencoes: [], servicos: [] };
+  }catch(e){ idsExcluidos = { entries: [], manutencoes: [], servicos: [] }; }
 }
 async function salvarIdExcluido(tipo, id){
   if(!idsExcluidos[tipo]) idsExcluidos[tipo] = [];
@@ -1635,6 +1641,7 @@ function renderManutencaoDraft(){
 
     row.innerHTML = `
       ${item.editandoId ? '<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando manutenção existente</div>' : ''}
+      ${item.editandoServicoId ? '<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando serviço geral existente</div>' : ''}
       <select class="sel-tipo" style="flex:0 0 140px;">
         <option value="Preventiva" ${item.tipo==='Preventiva'?'selected':''}>Preventiva</option>
         <option value="Corretiva" ${item.tipo==='Corretiva'?'selected':''}>Corretiva</option>
@@ -1737,6 +1744,10 @@ function renderManutencaoDraft(){
     row.querySelector('.remove-btn').addEventListener('click', async () => {
       if(item.editandoId && item.editandoEquipId){
         const excluiu = await excluirManutencao(item.editandoEquipId, item.editandoId);
+        if(!excluiu) return;
+      }
+      if(item.editandoServicoId){
+        const excluiu = await excluirServicoGeral(item.editandoServicoId);
         if(!excluiu) return;
       }
       manutencaoRascunho.splice(i,1);
@@ -2300,7 +2311,10 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(item.tipo === 'Serviço Geral'){
       const texto = item.descricao.trim();
       if(!texto) return;
-      servicosDiarios.push({data, tipo: item.categoria || 'Outros', texto, itemId: item.itemId || null});
+      if(item.editandoServicoId){
+        servicosDiarios = servicosDiarios.filter(s => s.id !== item.editandoServicoId);
+      }
+      servicosDiarios.push({id: item.editandoServicoId || uid(), data, tipo: item.categoria || 'Outros', texto, itemId: item.itemId || null});
       servicosSalvos++;
       return;
     }
@@ -2455,14 +2469,14 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
         if(!s.itemId || !idsFiltro.includes(s.itemId)) return;
         if(!dentroPeriodo(s.data)) return;
         if(palavraBusca && !s.texto.toLowerCase().includes(palavraBusca)) return;
-        registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:`${EQUIP_ITEM_MAP[s.itemId].nome}: ${s.texto}`});
+        registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:`${EQUIP_ITEM_MAP[s.itemId].nome}: ${s.texto}`, servicoId: s.id, ehServicoGeral: true});
       });
     }else{
       servicosDiarios.forEach(s => {
         if(s.itemId) return;
         if(!dentroPeriodo(s.data)) return;
         if(palavraBusca && !s.texto.toLowerCase().includes(palavraBusca)) return;
-        registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:s.texto});
+        registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:s.texto, servicoId: s.id, ehServicoGeral: true});
       });
     }
   }
@@ -2505,6 +2519,10 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
+    ${r.ehServicoGeral ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+      <button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
+      <button type="button" class="add-btn" data-excluir-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;background:var(--red-dim);border-color:var(--red);color:#fff;">Excluir</button>
+    </div>` : ''}
   </div>`).join('');
 });
 
@@ -2641,7 +2659,11 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
-  if(btnEditarLeitura) editarLeitura(btnEditarLeitura.dataset.data);
+  if(btnEditarLeitura){ editarLeitura(btnEditarLeitura.dataset.data); return; }
+  const btnEditarServico = e.target.closest('[data-editar-servico]');
+  if(btnEditarServico){ editarServicoGeral(btnEditarServico.dataset.servico); return; }
+  const btnExcluirServico = e.target.closest('[data-excluir-servico]');
+  if(btnExcluirServico) await excluirServicoGeral(btnExcluirServico.dataset.servico);
 });
 
 async function excluirManutencao(equipId, recId){
@@ -2660,6 +2682,38 @@ async function excluirManutencao(equipId, recId){
     document.getElementById('btn-consultar-diario').click();
   }
   return true;
+}
+
+async function excluirServicoGeral(servicoId){
+  const registro = servicosDiarios.find(s => s.id === servicoId);
+  if(!registro) return false;
+  const nomeEquip = registro.itemId && EQUIP_ITEM_MAP[registro.itemId] ? ` (${EQUIP_ITEM_MAP[registro.itemId].nome})` : '';
+  if(!confirm(`Excluir esse serviço geral${nomeEquip} (${fmtDate(registro.data)})?\n"${registro.texto}"\n\nEssa ação não pode ser desfeita.`)) return false;
+  servicosDiarios = servicosDiarios.filter(s => s.id !== servicoId);
+  await salvarIdExcluido('servicos', servicoId);
+  await salvarServicosDiarios();
+  showToast('Serviço excluído');
+  if(document.getElementById('resultado-consulta').innerHTML.trim() !== ''){
+    document.getElementById('btn-consultar-diario').click();
+  }
+  return true;
+}
+
+function editarServicoGeral(servicoId){
+  const registro = servicosDiarios.find(s => s.id === servicoId);
+  if(!registro) return;
+  manutencaoRascunho.push({
+    itemId: registro.itemId || '',
+    tipo: 'Serviço Geral',
+    descricao: registro.texto,
+    categoria: registro.tipo,
+    categoriaEquipServico: registro.itemId ? (secaoDoEquip(registro.itemId) || {}).key || '' : '',
+    editandoServicoId: registro.id
+  });
+  document.getElementById('h-manutencao-data').value = registro.data;
+  document.querySelector('.tab[data-tab="diario"]').click();
+  renderManutencaoDraft();
+  showToast('Editando serviço geral — altere e clique em Salvar');
 }
 
 function editarLeitura(data){
