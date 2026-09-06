@@ -2519,10 +2519,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
-    ${r.ehServicoGeral ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-      <button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
-      <button type="button" class="add-btn" data-excluir-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;background:var(--red-dim);border-color:var(--red);color:#fff;">Excluir</button>
-    </div>` : ''}
+    ${r.ehServicoGeral ? `<button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
   </div>`).join('');
 });
 
@@ -2661,9 +2658,7 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
   if(btnEditarLeitura){ editarLeitura(btnEditarLeitura.dataset.data); return; }
   const btnEditarServico = e.target.closest('[data-editar-servico]');
-  if(btnEditarServico){ editarServicoGeral(btnEditarServico.dataset.servico); return; }
-  const btnExcluirServico = e.target.closest('[data-excluir-servico]');
-  if(btnExcluirServico) await excluirServicoGeral(btnExcluirServico.dataset.servico);
+  if(btnEditarServico) editarServicoGeral(btnEditarServico.dataset.servico);
 });
 
 async function excluirManutencao(equipId, recId){
