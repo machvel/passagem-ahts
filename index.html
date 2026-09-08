@@ -240,16 +240,24 @@
 
 <div id="tab-diario">
   <div class="panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
-      <div class="section-title">Registro diário</div>
-      <input type="date" id="h-diario-data" style="flex:0 0 150px;">
+    <div id="cabecalho-registro-diario" style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;">
+      <div>
+        <div class="section-title" style="margin-bottom:2px;">Registro diário</div>
+        <div id="registro-diario-subtitulo" style="font-size:10.5px;color:var(--text-faint);">toque para ver os horímetros</div>
+      </div>
+      <div id="seta-registro-diario" style="font-size:16px;color:var(--accent);flex-shrink:0;">▼</div>
     </div>
-    <div id="lista-diario" style="margin-bottom:14px;"></div>
+    <div id="corpo-registro-diario" style="display:none;margin-top:10px;">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:10px;">
+        <input type="date" id="h-diario-data" style="flex:0 0 150px;">
+      </div>
+      <div id="lista-diario" style="margin-bottom:14px;"></div>
 
-    <p class="empty-hint" style="padding:0 0 10px;">Lifetime fuel e óleo lubrificante são só estatística — não entram na passagem de serviço.</p>
+      <p class="empty-hint" style="padding:0 0 10px;">Lifetime fuel e óleo lubrificante são só estatística — não entram na passagem de serviço.</p>
 
-    <button class="save-btn" id="btn-salvar-diario" type="button">Salvar leituras do dia</button>
-    <p class="empty-hint" id="diario-status" style="padding:6px 0 0;"></p>
+      <button class="save-btn" id="btn-salvar-diario" type="button">Salvar leituras do dia</button>
+      <p class="empty-hint" id="diario-status" style="padding:6px 0 0;"></p>
+    </div>
   </div>
 
   <div class="panel" style="margin-top:12px;">
@@ -1107,13 +1115,13 @@ function equipSelectorHtml(classPrefix, categoriaAtual, itemIdAtual, permiteVazi
   const secaoAtual = SECOES.find(s => s.key === categoriaAtual);
   const botoesItem = secaoAtual ? secaoAtual.itens.map(it => {
     const ativo = it.id === itemIdAtual;
-    return `<div class="${classPrefix}-item-btn" data-item-id="${escA(it.id)}" style="background:${ativo ? 'var(--accent-dim)' : 'var(--panel-2)'};border:1px solid ${ativo ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 6px;text-align:center;color:${ativo ? 'var(--accent)' : 'var(--text-dim)'};font-size:11px;font-weight:${ativo ? '600' : '400'};cursor:pointer;">${esc(it.nome)}</div>`;
+    return `<div class="${classPrefix}-item-btn" data-item-id="${escA(it.id)}" style="background:${ativo ? 'var(--accent-dim)' : 'var(--panel-2)'};border:1px solid ${ativo ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${ativo ? 'var(--accent)' : 'var(--text-dim)'};font-size:11px;font-weight:${ativo ? '600' : '400'};cursor:pointer;white-space:nowrap;">${esc(it.nome)}</div>`;
   }).join('') : '';
   return `<select class="${classPrefix}-categoria" style="flex:1 1 100%;">
       <option value="">${permiteVazio ? 'Nenhum (geral)' : 'Categoria...'}</option>
       ${opcoesCategoria}
     </select>
-    <div class="${classPrefix}-item-grid" style="flex:1 1 100%;display:${secaoAtual ? 'grid' : 'none'};grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-top:6px;">
+    <div class="${classPrefix}-item-grid" style="flex:1 1 100%;display:${secaoAtual ? 'flex' : 'none'};flex-wrap:wrap;gap:6px;margin-top:6px;">
       ${botoesItem}
     </div>`;
 }
@@ -2391,6 +2399,25 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
 });
 
 document.getElementById('h-diario-data').valueAsDate = new Date();
+
+let registroDiarioAberto = false;
+function atualizarSubtituloRegistroDiario(){
+  const sub = document.getElementById('registro-diario-subtitulo');
+  if(!sub) return;
+  if(registroDiarioAberto){
+    const dataVal = document.getElementById('h-diario-data').value;
+    sub.textContent = dataVal ? fmtDate(dataVal) : '';
+  }else{
+    sub.textContent = 'toque para ver os horímetros';
+  }
+}
+document.getElementById('cabecalho-registro-diario').addEventListener('click', () => {
+  registroDiarioAberto = !registroDiarioAberto;
+  document.getElementById('corpo-registro-diario').style.display = registroDiarioAberto ? 'block' : 'none';
+  document.getElementById('seta-registro-diario').textContent = registroDiarioAberto ? '▲' : '▼';
+  atualizarSubtituloRegistroDiario();
+});
+document.getElementById('h-diario-data').addEventListener('change', atualizarSubtituloRegistroDiario);
 document.getElementById('h-manutencao-data').valueAsDate = new Date();
 document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
   if(e.target.id === 'alerta-vencimentos-fechar'){
