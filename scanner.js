@@ -16,7 +16,7 @@ let carregandoPolyfill = null;
 // Exige a MESMA leitura se repetir algumas vezes seguidas antes de aceitar
 // como certa — evita que um quadro isolado com ruído confunda a leitura e
 // registre um código errado.
-const LEITURAS_PARA_CONFIRMAR = 3;
+const LEITURAS_PARA_CONFIRMAR = 2;
 
 function suportaLeituraCamera() {
   return 'mediaDevices' in navigator; // câmera em si — o método de leitura é escolhido depois
@@ -171,7 +171,7 @@ async function abrirScanner(aoLer) {
     } catch (e) {
       // ignora falha pontual de um frame, tenta de novo no próximo
     }
-  }, 250);
+  }, 180);
 }
 
 window.BramScanner = { abrirScanner, suportaLeituraCamera };
