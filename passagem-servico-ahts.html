@@ -1316,9 +1316,7 @@ async function carregarServicosDiarios(){
     const res = await window.storage.get('servicos_diarios_ahts', true);
     servicosDiarios = res && res.value ? JSON.parse(res.value) : [];
   }catch(e){ servicosDiarios = []; }
-  let precisaMigrar = false;
-  servicosDiarios.forEach(s => { if(!s.id){ s.id = uid(); precisaMigrar = true; } });
-  if(precisaMigrar) await salvarServicosDiarios();
+  if(migrarEDeduplicarServicos()) await salvarServicosDiarios();
 }
 async function salvarServicosDiarios(){
   try{ await window.storage.set('servicos_diarios_ahts', JSON.stringify(servicosDiarios), true); return true; }
@@ -1735,6 +1733,32 @@ function renderEstatisticasConsumo(containerId, itens, leiturasObj, unidade, lab
       <div style="font-family:var(--mono);font-size:12px;color:var(--text);">${soma.toFixed(casasDecimais)}${unidade} no período</div>`;
     c.appendChild(totalCell);
   }
+}
+
+function idDeterministicoServico(s){
+  const base = `${s.data}|${s.tipo}|${s.texto}|${s.itemId||''}`;
+  let hash = 0;
+  for(let i = 0; i < base.length; i++){
+    hash = ((hash << 5) - hash + base.charCodeAt(i)) | 0;
+  }
+  return 'legado' + Math.abs(hash);
+}
+
+function migrarEDeduplicarServicos(){
+  let mudou = false;
+  servicosDiarios.forEach(s => {
+    if(!s.id){ s.id = idDeterministicoServico(s); mudou = true; }
+  });
+  const vistos = {};
+  const semDuplicata = [];
+  servicosDiarios.forEach(s => {
+    const chave = `${s.data}|${s.tipo}|${s.texto}|${s.itemId||''}`;
+    if(vistos[chave]){ mudou = true; return; }
+    vistos[chave] = true;
+    semDuplicata.push(s);
+  });
+  servicosDiarios = semDuplicata;
+  return mudou;
 }
 
 function descricaoManut(m){
