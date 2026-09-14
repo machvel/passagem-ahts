@@ -1316,6 +1316,9 @@ async function carregarServicosDiarios(){
     const res = await window.storage.get('servicos_diarios_ahts', true);
     servicosDiarios = res && res.value ? JSON.parse(res.value) : [];
   }catch(e){ servicosDiarios = []; }
+  let precisaMigrar = false;
+  servicosDiarios.forEach(s => { if(!s.id){ s.id = uid(); precisaMigrar = true; } });
+  if(precisaMigrar) await salvarServicosDiarios();
 }
 async function salvarServicosDiarios(){
   try{ await window.storage.set('servicos_diarios_ahts', JSON.stringify(servicosDiarios), true); return true; }

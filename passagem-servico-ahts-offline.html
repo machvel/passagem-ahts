@@ -1513,6 +1513,9 @@ async function carregarServicosDiarios(){
     const res = await localStorageGet('servicos_diarios_ahts');
     servicosDiarios = res && res.value ? JSON.parse(res.value) : [];
   }catch(e){ servicosDiarios = []; }
+  let precisaMigrar = false;
+  servicosDiarios.forEach(s => { if(!s.id){ s.id = uid(); precisaMigrar = true; } });
+  if(precisaMigrar) await salvarServicosDiarios();
 }
 async function salvarServicosDiarios(){
   try{ await localStorageSet('servicos_diarios_ahts', JSON.stringify(servicosDiarios)); salvarNuvem(); return true; }
@@ -3181,6 +3184,9 @@ async function loadEntries(){
   await carregarNotasEquipamento();
   await carregarIdsExcluidos();
   await carregarNuvem();
+  let precisaMigrarServicos = false;
+  servicosDiarios.forEach(s => { if(!s.id){ s.id = uid(); precisaMigrarServicos = true; } });
+  if(precisaMigrarServicos) await salvarServicosDiarios();
   mergeReportsSync(PRELOADED_REPORTS);
   atualizarIndicadorTamanho();
   if(entries.length){
