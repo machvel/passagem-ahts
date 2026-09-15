@@ -1559,9 +1559,22 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
   if(!inicio || !fim){ showToast('Escolha o início e o fim do período'); return; }
   if(inicio > fim){ showToast('A data de início precisa ser antes da data de fim'); return; }
 
+  const dataAtualDiario = document.getElementById('h-diario-data').value;
   const pendentesNaoSalvos = [];
-  document.getElementById('lista-diario').querySelectorAll('input[data-diario-id], input[data-fuel-id], input[data-oleo-id]').forEach(inp => {
-    if(inp.value.trim()) pendentesNaoSalvos.push('leituras do Registro diário');
+  document.getElementById('lista-diario').querySelectorAll('input[data-diario-id]').forEach(inp => {
+    const salvo = (leituras[inp.dataset.diarioId] || []).find(l => l.data === dataAtualDiario);
+    const valorSalvo = salvo ? (salvo.valor || '').trim() : '';
+    if(inp.value.trim() !== valorSalvo) pendentesNaoSalvos.push('leituras do Registro diário');
+  });
+  document.getElementById('lista-diario').querySelectorAll('input[data-fuel-id]').forEach(inp => {
+    const salvo = (leiturasFuel[inp.dataset.fuelId] || []).find(l => l.data === dataAtualDiario);
+    const valorSalvo = salvo ? (salvo.valor || '').trim() : '';
+    if(inp.value.trim() !== valorSalvo) pendentesNaoSalvos.push('leituras do Registro diário');
+  });
+  document.getElementById('lista-diario').querySelectorAll('input[data-oleo-id]').forEach(inp => {
+    const salvo = (leiturasOleo[inp.dataset.oleoId] || []).find(l => l.data === dataAtualDiario);
+    const valorSalvo = salvo ? (salvo.valor || '').trim() : '';
+    if(inp.value.trim() !== valorSalvo) pendentesNaoSalvos.push('leituras do Registro diário');
   });
   manutencaoRascunho.forEach(item => {
     const temConteudo = item.tipo === 'Serviço Geral' ? item.descricao.trim() : (item.itemId && (item.descricao.trim() || item.manutTipo || item.idFluig));
