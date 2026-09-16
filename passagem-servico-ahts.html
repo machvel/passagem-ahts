@@ -1605,7 +1605,11 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
     const todasDiarias = manutencoesDiarias[eq.id] || [];
     const diariasPendentes = todasDiarias.filter(manutencaoEhPendente);
     const diariasObs = diarias.filter(m => !manutencaoEhPendente(m));
-    const servicosVinculados = servicosDiarios.filter(s => s.itemId === eq.id && s.data >= inicio && s.data <= fim);
+    const servicosVinculadosMap1 = {};
+    servicosDiarios.filter(s => s.itemId === eq.id && s.data >= inicio && s.data <= fim).forEach(s => {
+      servicosVinculadosMap1[`${s.tipo}|${s.texto}|${s.data}`] = s;
+    });
+    const servicosVinculados = Object.values(servicosVinculadosMap1);
     if(!diarias.length && !diariasPendentes.length && !servicosVinculados.length) return;
     const st = equipState[eq.id];
 
@@ -2662,7 +2666,11 @@ function buildReport(){
         obsFinal = obsFinal ? obsFinal + '\n' + bloco : bloco;
       }
     }
-    const servicosVinculados = servicosDiarios.filter(s => s.itemId === it.id && header.inicio && header.fim && s.data >= header.inicio && s.data <= header.fim);
+    const servicosVinculadosMap2 = {};
+    servicosDiarios.filter(s => s.itemId === it.id && header.inicio && header.fim && s.data >= header.inicio && s.data <= header.fim).forEach(s => {
+      servicosVinculadosMap2[`${s.tipo}|${s.texto}|${s.data}`] = s;
+    });
+    const servicosVinculados = Object.values(servicosVinculadosMap2);
     if(servicosVinculados.length){
       const blocoServicos = servicosVinculados.map(s => `[Diário ${fmtDate(s.data)}] Serviço Geral (${s.tipo}): ${s.texto}`).join('\n');
       if(!obsFinal.includes(blocoServicos)){
