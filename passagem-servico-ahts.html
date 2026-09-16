@@ -2697,7 +2697,12 @@ function buildReport(){
   LUBRIFICANTES.forEach(n => lub[n] = lubState[n]);
   const servicosManuais = servicos.filter(s => servicoTexto(s).trim() !== '').map(s => ({tipo: servicoTipo(s), texto: servicoTexto(s).trim()}));
   const servicosDiariosNoPeriodo = servicosDiarios.filter(s => !s.itemId && header.inicio && header.fim && s.data >= header.inicio && s.data <= header.fim);
-  const servicosFinal = servicosManuais.concat(servicosDiariosNoPeriodo.map(s => ({tipo: s.tipo, texto: `[Diário ${fmtDate(s.data)}] ${s.texto}`})));
+  const servicosDiariosFormatados = servicosDiariosNoPeriodo.map(s => ({tipo: s.tipo, texto: `[Diário ${fmtDate(s.data)}] ${s.texto}`}));
+  const servicosFinalMap = {};
+  servicosManuais.concat(servicosDiariosFormatados).forEach(s => {
+    servicosFinalMap[`${s.tipo}|${s.texto}`] = s;
+  });
+  const servicosFinal = Object.values(servicosFinalMap);
   return {
     id: uid(), criadoEm: new Date().toISOString(), header,
     equip, servicos: servicosFinal,
