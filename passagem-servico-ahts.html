@@ -175,6 +175,8 @@
   .rp-row b{color:#555;font-weight:600;}
   .rp-tag-on{font-weight:700;}
   .rp-obs{font-size:11px;margin-top:5px;padding-top:5px;border-top:0.5px dashed #ccc;color:#333;}
+  .rp-obs-linha{font-size:11px;color:#333;margin-bottom:7px;}
+  .rp-obs-linha:last-child{margin-bottom:0;}
   .rp-status-op{color:#1a7a3f;font-weight:700;}
   .rp-status-nop{color:#b02020;font-weight:700;}
   .rp-status-at{color:#a06a00;font-weight:700;}
@@ -2871,7 +2873,10 @@ function buildPrintHTML(r){
           `${esc(filtroLabel(f.tipo))}${f.emUso!=null?' '+esc(f.emUso)+'h':''}${f.media!=null?' <span style="color:#777;">(média '+esc(Math.round(f.media))+'h)</span>':''}`
         ).join(' · ') + `</div>`;
       }
-      if(e.obs) html += `<div class="rp-obs">${esc(e.obs)}</div>`;
+      if(e.obs){
+        const linhasObs = e.obs.split('\n').filter(l => l.trim());
+        html += `<div class="rp-obs">` + linhasObs.map(l => `<div class="rp-obs-linha">${esc(l)}</div>`).join('') + `</div>`;
+      }
       getPendenciasArr(e).forEach((p, i, arr) => { html += `<div class="rp-obs" style="color:#a06a00;"><b>Pendência${arr.length>1?' '+(i+1):''}:</b> ${esc(p)}</div>`; });
       html += `</div>`;
     });
@@ -2888,7 +2893,7 @@ function buildPrintHTML(r){
     geraisList.forEach(e => {
       const isAtencao = e.atencao || e.status === 'atencao' || e.status === 'nao_operacional';
       const statusTxt = statusLabel(e.status) + (isAtencao ? ' ⚠' : '');
-      let obsTxt = esc(e.obs) || '-';
+      let obsTxt = e.obs ? e.obs.split('\n').filter(l => l.trim()).map(l => esc(l)).join('<br><br>') : '-';
       getPendenciasArr(e).forEach((p, i, arr) => { obsTxt += `<br><b style="color:#a06a00;">Pendência${arr.length>1?' '+(i+1):''}:</b> ${esc(p)}`; });
       html += `<tr><td>${esc(e.nome)}</td><td class="${isAtencao ? 'rp-status-at' : statusClass(e.status)}">${statusTxt}</td><td>${obsTxt}</td></tr>`;
     });
