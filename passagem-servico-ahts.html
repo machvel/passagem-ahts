@@ -143,6 +143,13 @@
   .pend-item .pend-texto{font-size:12px;margin-top:3px;padding-left:2px;border-left:2px solid var(--border-strong);padding-left:8px;}
   .pend-item .meta{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);margin-top:4px;}
   .pend-vermais{text-align:center;padding:9px 0 2px;font-family:var(--mono);font-size:11.5px;color:var(--accent);cursor:pointer;}
+  .busca-resultado-wrap{background:#eef1f6;border-radius:10px;padding:12px;margin-top:4px;}
+  .busca-resultado-wrap .pend-item{background:#fff;border-radius:0 6px 6px 0;border-top:none;border-left:3px solid #8896a8;padding:9px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.08);color:#1a2332;}
+  .busca-resultado-wrap .pend-item:last-child{margin-bottom:0;}
+  .busca-resultado-wrap .pend-item:hover{background:#fff;}
+  .busca-resultado-wrap .pend-item .nome{color:inherit;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;}
+  .busca-resultado-wrap .pend-item .meta{color:#6b7688;}
+  .busca-resultado-wrap .empty-hint{color:#5a6472;}
   .pend-vermais:hover{text-decoration:underline;}
   .highlight-flash{outline:2px solid var(--accent);animation:flashPulse 1.5s ease-out;}
   @keyframes flashPulse{0%{box-shadow:0 0 0 4px var(--accent-dim);}100%{box-shadow:0 0 0 0 transparent;}}
@@ -544,6 +551,27 @@ const SECOES = [
 SECOES.forEach(sec => sec.itens.forEach(it => {
   if(it.tipo === 'motor') it.manut = it.horas.concat(it.filtros);
 }));
+
+const MAPA_AMOSTRA_EQUIP = {
+  'me1':'ME#1', 'me2':'ME#2', 'me3':'ME#3', 'me4':'ME#4',
+  'dg1':'DG#1', 'dg2':'DG#2', 'dg3':'DG#3', 'dg4':'DG#4',
+  'red_bb':'RED#1', 'red_be':'RED#2',
+  'leme_bb':'LEME#1', 'leme_be':'LEME#2',
+  'bow1':'BOW#1', 'bow2':'BOW#2', 'bow3':'BOW#3',
+  'stt1':'STT#1', 'stt2':'STT#2',
+  'cpp_bb':'CPP#1', 'cpp_be':'CPP#2',
+  'ger_6':'SERVO', 'ger_19':"ALAR'S", 'ger_26':'DGE', 'ger_23':'WINDLESS',
+  'ger_18|Triplex BB':'TRIPLEX#1', 'ger_18|Triplex BE':'TRIPLEX#2',
+  'comp|Compressor de Ar 1':'COMP#1', 'comp|Compressor de Ar 2':'COMP#2',
+  'ger_22|Trolley BB':'TROLLEY#1', 'ger_22|Trolley BE':'TROLLEY#2',
+  'ger_12|1P':'BRG PS#1', 'ger_12|2P':'BRG PS#2', 'ger_12|3P':'BRG PS#3',
+  'ger_12|1S':'BRG SB#1', 'ger_12|2S':'BRG SB#2', 'ger_12|3S':'BRG SB#3',
+  'ger_12|DE DG2':'DE DG#2', 'ger_12|NDE DG2':'NDE DG#2',
+  'ger_12|DE DG3':'DE DG#3', 'ger_12|NDE DG3':'NDE DG#3',
+  'ger_12|DE SG1':'DE SG#1', 'ger_12|NDE SG1':'NDE SG#1',
+  'ger_12|DE SG2':'DE SG#2', 'ger_12|NDE SG2':'NDE SG#2'
+};
+function chaveAmostraMapa(itemId, subItem){ return subItem ? `${itemId}|${subItem}` : itemId; }
 
 const AMOSTRA_OLEO = ['ME#1','ME#2','ME#3','ME#4','DG#1','DG#2','DG#3','DG#4','RED#1','RED#2','LEME#1','LEME#2',
   'BOW#1','BOW#2','BOW#3','STT#1','STT#2','SERVO','L.P WINCH','AFT.TUG','WINDLESS','DGE','DAVIT',
@@ -1648,8 +1676,19 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
         if(!st.pendencias.includes(linha)) st.pendencias.push(linha);
       });
     }
+    diarias.filter(m => m.tipo === 'CBM').forEach(m => {
+      const nomeAmostra = MAPA_AMOSTRA_EQUIP[chaveAmostraMapa(eq.id, m.subItem)];
+      if(!nomeAmostra) return;
+      const existente = amostraColetada.find(a => a.nome === nomeAmostra);
+      if(existente){
+        if(!existente.data || m.data > existente.data) existente.data = m.data;
+      }else{
+        amostraColetada.push({nome: nomeAmostra, data: m.data});
+      }
+    });
     manutAplicadas++;
   });
+  renderAmostra();
 
   const servicosNaoVinculados = servicosDiarios.filter(s => !s.itemId && s.data >= inicio && s.data <= fim);
   servicosNaoVinculados.forEach(s => {
@@ -2370,12 +2409,12 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
   }
 
   if(registros.length === 0){
-    resultEl.innerHTML = vencimentoHtml + '<p class="empty-hint">Nenhum registro encontrado com esses filtros.</p>';
+    resultEl.innerHTML = vencimentoHtml + '<div class="busca-resultado-wrap"><p class="empty-hint">Nenhum registro encontrado com esses filtros.</p></div>';
     return;
   }
   const cabecalhoHtml = idFluigBusca ? `<p class="empty-hint" style="padding:0 0 8px;">${registros.length} ocorrência(s) encontrada(s) com essa peça.</p>` : '';
-  resultEl.innerHTML = vencimentoHtml + cabecalhoHtml + registros.map(r => `<div class="pend-item" style="cursor:default;">
-    <div class="nome">${esc(r.tipo)}</div>
+  resultEl.innerHTML = vencimentoHtml + `<div class="busca-resultado-wrap">` + cabecalhoHtml + registros.map(r => `<div class="pend-item" style="cursor:default;border-left-color:${corTipoRegistro(r.tipo)};">
+    <div class="nome" style="color:${corTipoRegistro(r.tipo)};">${esc(r.tipo)}</div>
     <div>${esc(r.desc)}</div>
     <div class="meta">${fmtDate(r.data)}</div>
     ${r.ehManutencao ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
@@ -2385,7 +2424,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
     ${r.ehServicoGeral ? `<button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
-  </div>`).join('');
+  </div>`).join('') + `</div>`;
 });
 
 async function marcarComoCorrigido(equipId, recId, correcao){
@@ -2638,6 +2677,14 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 function statusLabel(k){ return k ? (STATUS.find(s=>s.key===k)||{}).label || k : 'não informado'; }
+function corTipoRegistro(tipo){
+  if(tipo === 'Corretiva') return '#d64545';
+  if(tipo === 'Preventiva') return '#2a9d5c';
+  if(tipo === 'CBM') return '#c98a1f';
+  if(tipo && tipo.indexOf('Serviço') === 0) return '#3b6fd6';
+  return '#8896a8';
+}
+
 function fmtDate(d){ if(!d) return ''; const p = d.split('-'); return p.length===3 ? `${p[2]}/${p[1]}/${p[0]}` : d; }
 
 function getManutencoesDiariasNoPeriodo(itId, inicio, fim){
