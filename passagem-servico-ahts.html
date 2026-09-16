@@ -484,8 +484,7 @@ const SECOES = [
     {id:'red_be', nome:'Redutora BE', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true}
   ]},
   {key:'ge', titulo:'Gerador de eixo', itens:[
-    {id:'ge_bb', nome:'Gerador de Eixo BB', tipo:'simples', manut:['Óleo D/E','Óleo ND/E','Outras']},
-    {id:'ge_be', nome:'Gerador de Eixo BE', tipo:'simples', manut:['Óleo D/E','Óleo ND/E','Outras']}
+    {id:'ge', nome:'Gerador de Eixo', tipo:'gerais'}
   ]},
   {key:'cpp', titulo:'CPP', itens:[
     {id:'cpp_bb', nome:'CPP BB', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
@@ -508,12 +507,10 @@ const SECOES = [
     {id:'stt2_vfd', nome:'STT#2 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true}
   ]},
   {key:'compressores', titulo:'Compressores de ar', itens:[
-    {id:'comp1', nome:'Compressor de Ar 1', tipo:'simples', manut:['Filtro','Óleo','Outras']},
-    {id:'comp2', nome:'Compressor de Ar 2', tipo:'simples', manut:['Filtro','Óleo','Outras']}
+    {id:'comp', nome:'Compressor de Ar', tipo:'gerais'}
   ]},
   {key:'gerais', titulo:'Equipamentos gerais', itens:[
-    {id:'ger_0', nome:'Bomba de Incêndio Principal', tipo:'gerais'},
-    {id:'ger_1', nome:'Bomba de Incêndio Emergência', tipo:'gerais'},
+    {id:'ger_0', nome:'Bomba de Incêndio', tipo:'gerais'},
     {id:'ger_2', nome:'Frigoríficas', tipo:'gerais'},
     {id:'ger_3', nome:'Ar Condicionado', tipo:'gerais'},
     {id:'ger_4', nome:'Sistema Hidróforo', tipo:'gerais'},
@@ -878,10 +875,15 @@ function renderLub(){
 
 const SERVICO_TIPOS = ['Arrumação','Conserto','Desobstrução','Instalação','Limpeza','Montagem','Pintura','Substituição','Suplementação','Outros'];
 const SUBITENS_POR_EQUIP = {
+  'ge': ['Gerador de Eixo BB','Gerador de Eixo BE'],
+  'comp': ['Compressor de Ar 1','Compressor de Ar 2'],
+  'ger_0': ['Bomba de Incêndio Principal','Bomba de Incêndio Emergência'],
   'ger_4': ['Bomba 1','Bomba 2'],
   'ger_5': ['BTT 1','BTT 2','BTT 3','STT1','STT 2','RED. BB','RED. BE'],
   'ger_8': ['OWS 1','OWS 2'],
   'ger_9': ['Chiller A','Chiller B'],
+  'ger_10': ['FIFI BB','FIFI BE'],
+  'ger_11': ['Stern Tube BB','Stern Tube BE'],
   'ger_12': ['1P','2P','3P','1S','2S','3S','DE DG2','NDE DG2','DE DG3','NDE DG3','DE SG1','NDE SG1','DE SG2','NDE SG2'],
   'ger_13': ['1P','2P','1S','2S'],
   'ger_15': ['Watermaker 1','Watermaker 2'],
@@ -2152,7 +2154,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(!confirm(`Já existe um registro parecido hoje pra: ${lista}. Confirma salvar mesmo assim?`)) return;
   }
 
-  let manutSalvas = 0, servicosSalvos = 0;
+  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false;
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral'){
       const texto = item.descricao.trim();
@@ -2170,7 +2172,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
 
     if(SUBITENS_POR_EQUIP[item.itemId]){
       const subItensSelecionados = item.subItens || [];
-      if(subItensSelecionados.length === 0) return;
+      if(subItensSelecionados.length === 0){ subItemFaltando = true; return; }
       if(item.editandoId && item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
         manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
       }
@@ -2212,7 +2214,12 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     manutSalvas++;
   });
   if(manutSalvas === 0 && servicosSalvos === 0){
-    status.textContent = 'Nenhum item preenchido.';
+    if(subItemFaltando){
+      status.textContent = 'Nada foi salvo: escolha pelo menos um item específico (ex: BB, BE, 1, 2) antes de salvar.';
+      showToast('Selecione um item específico antes de salvar');
+    }else{
+      status.textContent = 'Nenhum item preenchido.';
+    }
     return;
   }
   let okManut = true, okServico = true;
@@ -2232,8 +2239,8 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   const partes = [];
   if(manutSalvas) partes.push(`${manutSalvas} manutenção(ões)`);
   if(servicosSalvos) partes.push(`${servicosSalvos} serviço(s) geral(is)`);
-  status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.`;
-  showToast('Registro salvo');
+  status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.` + (subItemFaltando ? ' Atenção: um item não foi salvo por falta de seleção específica (BB, BE, 1, 2...).' : '');
+  showToast(subItemFaltando ? 'Salvo, mas um item foi ignorado (faltou selecionar BB/BE/etc)' : 'Registro salvo');
 });
 
 document.getElementById('h-diario-data').valueAsDate = new Date();

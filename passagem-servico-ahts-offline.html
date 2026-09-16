@@ -2376,7 +2376,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(!confirm(`Já existe um registro parecido hoje pra: ${lista}. Confirma salvar mesmo assim?`)) return;
   }
 
-  let manutSalvas = 0, servicosSalvos = 0;
+  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false;
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral'){
       const texto = item.descricao.trim();
@@ -2394,7 +2394,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
 
     if(SUBITENS_POR_EQUIP[item.itemId]){
       const subItensSelecionados = item.subItens || [];
-      if(subItensSelecionados.length === 0) return;
+      if(subItensSelecionados.length === 0){ subItemFaltando = true; return; }
       if(item.editandoId && item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
         manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
       }
@@ -2436,7 +2436,12 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     manutSalvas++;
   });
   if(manutSalvas === 0 && servicosSalvos === 0){
-    status.textContent = 'Nenhum item preenchido.';
+    if(subItemFaltando){
+      status.textContent = 'Nada foi salvo: escolha pelo menos um item específico (ex: BB, BE, 1, 2) antes de salvar.';
+      showToast('Selecione um item específico antes de salvar');
+    }else{
+      status.textContent = 'Nenhum item preenchido.';
+    }
     return;
   }
   let okManut = true, okServico = true;
@@ -2456,8 +2461,8 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   const partes = [];
   if(manutSalvas) partes.push(`${manutSalvas} manutenção(ões)`);
   if(servicosSalvos) partes.push(`${servicosSalvos} serviço(s) geral(is)`);
-  status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.`;
-  showToast('Registro salvo');
+  status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.` + (subItemFaltando ? ' Atenção: um item não foi salvo por falta de seleção específica (BB, BE, 1, 2...).' : '');
+  showToast(subItemFaltando ? 'Salvo, mas um item foi ignorado (faltou selecionar BB/BE/etc)' : 'Registro salvo');
 });
 
 document.getElementById('h-diario-data').valueAsDate = new Date();
