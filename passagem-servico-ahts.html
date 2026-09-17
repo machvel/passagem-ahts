@@ -1754,7 +1754,7 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
         if(!st.pendencias.includes(linha)) st.pendencias.push(linha);
       });
     }
-    diarias.filter(m => m.tipo === 'CBM').forEach(m => {
+    diarias.filter(m => m.tipo === 'CBM' && (m.subTipoColeta || 'oleo') === 'oleo').forEach(m => {
       const nomeAmostra = MAPA_AMOSTRA_EQUIP[chaveAmostraMapa(eq.id, m.subItem)];
       if(!nomeAmostra) return;
       const existente = amostraColetada.find(a => a.nome === nomeAmostra);
