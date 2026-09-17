@@ -390,6 +390,7 @@
       <div class="field"><label>Até</label><input type="date" id="h-consulta-fim"></div>
     </div>
     <button class="save-btn secondary" id="btn-consultar-diario" type="button" style="margin-top:8px;">Buscar</button>
+    <button class="add-btn" id="btn-status-amostras" type="button" style="margin-top:8px;">📊 Status das amostras</button>
     <div id="resultado-consulta" style="margin-top:12px;"></div>
   </div>
 
@@ -517,7 +518,7 @@ async function salvarNuvem(){
       const snap = await transacao.get(nuvemRef());
       let entriesFinal = entries, leiturasFinal = leituras, leiturasFuelFinal = leiturasFuel,
           leiturasOleoFinal = leiturasOleo, manutFinal = manutencoesDiarias, servicosFinal = servicosDiarios,
-          notasFinal = notasEquipamento, idsExcluidosFinal = idsExcluidos;
+          notasFinal = notasEquipamento, idsExcluidosFinal = idsExcluidos, prazosFinal = prazosColeta;
 
       if(snap.exists){
         const remoto = snap.data();
@@ -564,18 +565,19 @@ async function salvarNuvem(){
         servicosFinal = Object.values(servicosMesclado);
 
         notasFinal = Object.assign({}, remoto.notasEquipamento || {}, notasEquipamento || {});
+        prazosFinal = Object.assign({}, remoto.prazosColeta || {}, prazosColeta || {});
       }
 
       transacao.set(nuvemRef(), {
         entries: entriesFinal, leituras: leiturasFinal, leiturasFuel: leiturasFuelFinal,
         leiturasOleo: leiturasOleoFinal, manutencoesDiarias: manutFinal, servicosDiarios: servicosFinal,
-        notasEquipamento: notasFinal, idsExcluidos: idsExcluidosFinal,
+        notasEquipamento: notasFinal, idsExcluidos: idsExcluidosFinal, prazosColeta: prazosFinal,
         atualizadoEm: new Date().toISOString()
       });
 
       entries = entriesFinal; leituras = leiturasFinal; leiturasFuel = leiturasFuelFinal;
       leiturasOleo = leiturasOleoFinal; manutencoesDiarias = manutFinal; servicosDiarios = servicosFinal;
-      notasEquipamento = notasFinal; idsExcluidos = idsExcluidosFinal;
+      notasEquipamento = notasFinal; idsExcluidos = idsExcluidosFinal; prazosColeta = prazosFinal;
     });
     atualizarIndicadorNuvem(true);
     atualizarIndicadorTamanho();
@@ -618,6 +620,7 @@ async function carregarNuvem(){
     }
     if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios.filter(s => !s.id || !idsExcluidosMesclado.servicos.includes(s.id));
     if(dados.notasEquipamento) notasEquipamento = dados.notasEquipamento;
+    if(dados.prazosColeta) prazosColeta = Object.assign({}, prazosColeta, dados.prazosColeta);
     atualizarIndicadorNuvem(true);
     atualizarIndicadorTamanho();
     return true;
@@ -1140,9 +1143,12 @@ function secaoDoEquip(itemId){
   return SECOES.find(sec => sec.itens.some(it => it.id === itemId));
 }
 
-function equipSelectorHtml(classPrefix, categoriaAtual, itemIdAtual, permiteVazio){
-  const opcoesCategoria = SECOES.map(sec => `<option value="${escA(sec.key)}" ${sec.key===categoriaAtual?'selected':''}>${esc(sec.titulo)}</option>`).join('');
-  const secaoAtual = SECOES.find(s => s.key === categoriaAtual);
+function equipSelectorHtml(classPrefix, categoriaAtual, itemIdAtual, permiteVazio, idsPermitidos){
+  const secoesFiltradas = idsPermitidos
+    ? SECOES.map(sec => ({...sec, itens: sec.itens.filter(it => idsPermitidos.includes(it.id))})).filter(sec => sec.itens.length)
+    : SECOES;
+  const opcoesCategoria = secoesFiltradas.map(sec => `<option value="${escA(sec.key)}" ${sec.key===categoriaAtual?'selected':''}>${esc(sec.titulo)}</option>`).join('');
+  const secaoAtual = secoesFiltradas.find(s => s.key === categoriaAtual);
   const botoesItem = secaoAtual ? secaoAtual.itens.map(it => {
     const ativo = it.id === itemIdAtual;
     return `<div class="${classPrefix}-item-btn" data-item-id="${escA(it.id)}" style="background:${ativo ? 'var(--accent-dim)' : 'var(--panel-2)'};border:1px solid ${ativo ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${ativo ? 'var(--accent)' : 'var(--text-dim)'};font-size:11px;font-weight:${ativo ? '600' : '400'};cursor:pointer;white-space:nowrap;">${esc(it.nome)}</div>`;
@@ -1435,6 +1441,9 @@ let manutencoesDiarias = {};
 let servicosDiarios = [];
 let notasEquipamento = {};
 let idsExcluidos = { entries: [], manutencoes: [], servicos: [] };
+let prazosColeta = {};
+const EQUIP_IDS_VIBRACAO = ['dg1','dg2','dg3','dg4','red_bb','red_be','bow1','bow2','bow3','stt1','stt2','ger_12','ger_10','ger_0'];
+function chavePrazoColeta(itemId, subItem, subTipo){ return `${itemId}|${subItem||''}|${subTipo}`; }
 let manutencaoRascunho = [];
 
 const PECAS_FLUIG_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQML-1Ba_-pg-cC-z2SwovE2stZ02Q3N_W9BaC2TUbQhbsROY0wjR5W9MdfIuRKYihK_fW_hTY3hOLu/pub?gid=0&single=true&output=csv';
@@ -1571,6 +1580,16 @@ async function salvarIdExcluido(tipo, id){
   try{ await localStorageSet('ids_excluidos_ahts', JSON.stringify(idsExcluidos)); }
   catch(e){ console.error('Erro ao salvar lista de exclusões:', e); }
 }
+async function carregarPrazosColeta(){
+  try{
+    const res = await localStorageGet('prazos_coleta_ahts');
+    prazosColeta = res && res.value ? JSON.parse(res.value) : {};
+  }catch(e){ prazosColeta = {}; }
+}
+async function salvarPrazosColeta(){
+  try{ await localStorageSet('prazos_coleta_ahts', JSON.stringify(prazosColeta)); salvarNuvem(); return true; }
+  catch(e){ console.error('Erro ao salvar prazos de coleta:', e); return false; }
+}
 async function carregarLeiturasOleo(){
   try{
     const res = await localStorageGet('leituras_oleo_ahts');
@@ -1600,11 +1619,17 @@ function renderManutencaoDraft(){
     const usaSubItens = !ehServicoGeral && !!SUBITENS_POR_EQUIP[item.itemId];
     const usaCorrigido = item.tipo === 'Corretiva';
     const usaCBM = item.tipo === 'CBM';
+    if(usaCBM && !item.subTipoColeta) item.subTipoColeta = 'oleo';
+    if(usaCBM && item.subTipoColeta === 'vibracao' && item.itemId && !EQUIP_IDS_VIBRACAO.includes(item.itemId)){
+      item.itemId = '';
+      item.categoriaEquip = '';
+    }
 
     let equipHtml = '';
     if(!ehServicoGeral){
       const categoriaAtual = item.categoriaEquip || (secaoDoEquip(item.itemId) || {}).key || '';
-      equipHtml = equipSelectorHtml('sel-equip', categoriaAtual, item.itemId, false);
+      const idsPermitidos = (usaCBM && item.subTipoColeta === 'vibracao') ? EQUIP_IDS_VIBRACAO : null;
+      equipHtml = equipSelectorHtml('sel-equip', categoriaAtual, item.itemId, false, idsPermitidos);
     }
 
     let campoDetalheHtml;
@@ -1626,6 +1651,7 @@ function renderManutencaoDraft(){
     }else if(usaSubItens){
       const opcoesSubItens = SUBITENS_POR_EQUIP[item.itemId];
       const subItensSelecionados = item.subItens || [];
+      const ocultarDescricaoOleo = usaCBM && item.subTipoColeta === 'oleo' && item.resultado !== 'Alerta' && item.resultado !== 'Crítico';
       campoDetalheHtml = `<div style="flex:1 1 100%;">
         <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:5px;">Selecione o(s) item(ns) específico(s)</label>
         <div class="subitens-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:8px;">
@@ -1633,7 +1659,7 @@ function renderManutencaoDraft(){
             <input type="checkbox" class="chk-subitem" value="${escA(s)}" ${subItensSelecionados.includes(s) ? 'checked' : ''}> ${esc(s)}
           </label>`).join('')}
         </div>
-        <input type="text" class="campo-detalhe" placeholder="Descrição adicional (opcional)" value="${escA(item.descricao)}" style="width:100%;">
+        ${ocultarDescricaoOleo ? '' : `<input type="text" class="campo-detalhe" placeholder="${usaCBM ? 'Descreva o que foi encontrado na análise' : 'Descrição adicional (opcional)'}" value="${escA(item.descricao)}" style="width:100%;">`}
       </div>`;
     }else if(usaSeletorPreventivo){
       const opcoes = [...equipSelecionado.horas, ...equipSelecionado.filtros, 'Outros'];
@@ -1648,6 +1674,11 @@ function renderManutencaoDraft(){
         </div>
         ${item.manutTipo === 'Outros' ? `<input type="text" class="campo-outros" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="width:100%;">` : ''}
       </div>`;
+    }else if(usaCBM && item.subTipoColeta === 'oleo'){
+      const precisaDescricao = item.resultado === 'Alerta' || item.resultado === 'Crítico';
+      campoDetalheHtml = precisaDescricao
+        ? `<input type="text" class="campo-detalhe" placeholder="Descreva o que foi encontrado na análise" value="${escA(item.descricao)}" style="flex:1 1 100%;">`
+        : '';
     }else{
       campoDetalheHtml = `<input type="text" class="campo-detalhe" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="flex:1 1 100%;">`;
     }
@@ -1668,12 +1699,43 @@ function renderManutencaoDraft(){
         <div class="idfluig-hint" style="font-size:10px;color:var(--text-faint);margin-top:3px;"></div>
       </div>`;
     }
+    let subTipoColetaHtml = '';
+    let prazoColetaHtml = '';
     if(usaCBM){
+      subTipoColetaHtml = `<div style="flex:1 1 100%;display:flex;gap:6px;">
+        ${['vibracao','oleo'].map(st => {
+          const ativo = item.subTipoColeta === st;
+          const label = st === 'vibracao' ? '📳 Vibração' : '🛢 Amostra de Óleo';
+          return `<div class="btn-subtipo-coleta" data-subtipo="${st}" style="flex:1;background:${ativo?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${ativo?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px;text-align:center;color:${ativo?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${ativo?'600':'400'};cursor:pointer;">${label}</div>`;
+        }).join('')}
+      </div>`;
       resultadoCbmHtml = `<select class="sel-resultado-cbm" style="flex:0 0 150px;">
         <option value="Normal" ${item.resultado !== 'Alerta' && item.resultado !== 'Crítico' ? 'selected' : ''}>Normal</option>
         <option value="Alerta" ${item.resultado === 'Alerta' ? 'selected' : ''}>Alerta</option>
         <option value="Crítico" ${item.resultado === 'Crítico' ? 'selected' : ''}>Crítico</option>
       </select>`;
+      if(item.itemId && item.subTipoColeta === 'oleo'){
+        const chavePrazo = chavePrazoColeta(item.itemId, item.subItens && item.subItens[0], item.subTipoColeta);
+        const prazoExistente = prazosColeta[chavePrazo];
+        if(prazoExistente && !item.editandoPrazo){
+          const dataBase = document.getElementById('h-manutencao-data') ? document.getElementById('h-manutencao-data').value : '';
+          let proximaTxt = '';
+          if(dataBase){
+            const d = new Date(dataBase+'T00:00:00');
+            d.setDate(d.getDate() + prazoExistente);
+            proximaTxt = ` — próxima prevista: ${fmtDate(d.toISOString().slice(0,10))}`;
+          }
+          prazoColetaHtml = `<div style="flex:1 1 100%;background:var(--panel-2);border-radius:6px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <span style="font-size:10.5px;color:var(--text-faint);">Prazo já configurado: a cada ${prazoExistente} dias${proximaTxt}</span>
+            <span class="link-alterar-prazo" style="font-size:10.5px;color:var(--accent);text-decoration:underline;cursor:pointer;">alterar</span>
+          </div>`;
+        }else{
+          prazoColetaHtml = `<div style="flex:1 1 100%;">
+            <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:3px;">Intervalo até a próxima coleta (dias)</label>
+            <input type="number" class="inp-prazo-coleta" placeholder="Ex: 90" value="${escA(item.prazoColetaInput || '')}" style="width:140px;">
+          </div>`;
+        }
+      }
     }
 
     const horimetroHtml = ehServicoGeral ? '' : `<input type="text" class="inp-horimetro" placeholder="Horímetro (opcional)" value="${escA(item.horimetro)}" style="flex:0 0 130px;">`;
@@ -1687,10 +1749,12 @@ function renderManutencaoDraft(){
         <option value="Serviço Geral" ${item.tipo==='Serviço Geral'?'selected':''}>Serviço Geral</option>
         <option value="CBM" ${item.tipo==='CBM'?'selected':''}>CBM</option>
       </select>
+      ${subTipoColetaHtml}
       ${equipHtml}
       ${campoDetalheHtml}
       ${statusEquipHtml}
       ${resultadoCbmHtml}
+      ${prazoColetaHtml}
       ${corrigidoHtml}
       ${idFluigHtml}
       ${horimetroHtml}
@@ -1742,7 +1806,8 @@ function renderManutencaoDraft(){
           }
         });
       });
-      row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
+      const campoDetalheSubitens = row.querySelector('.campo-detalhe');
+      if(campoDetalheSubitens) campoDetalheSubitens.addEventListener('input', e => item.descricao = e.target.value);
     }else if(usaSeletorPreventivo){
       if(!item.manutTipo) item.manutTipo = [...equipSelecionado.horas, ...equipSelecionado.filtros][0];
       row.querySelector('.grid-preventiva').addEventListener('click', e => {
@@ -1756,7 +1821,8 @@ function renderManutencaoDraft(){
         if(outrosInput) outrosInput.addEventListener('input', e => item.descricao = e.target.value);
       }
     }else{
-      row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
+      const campoDetalhePadrao = row.querySelector('.campo-detalhe');
+      if(campoDetalhePadrao) campoDetalhePadrao.addEventListener('input', e => item.descricao = e.target.value);
     }
     if(usaCorrigido){
       row.querySelectorAll('.btn-status-equip').forEach(btn => {
@@ -1775,7 +1841,21 @@ function renderManutencaoDraft(){
       atualizarHintPeca();
     }
     if(usaCBM){
-      row.querySelector('.sel-resultado-cbm').addEventListener('change', e => item.resultado = e.target.value);
+      row.querySelector('.sel-resultado-cbm').addEventListener('change', e => { item.resultado = e.target.value; renderManutencaoDraft(); });
+      row.querySelectorAll('.btn-subtipo-coleta').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if(item.subTipoColeta === btn.dataset.subtipo) return;
+          item.subTipoColeta = btn.dataset.subtipo;
+          item.itemId = '';
+          item.categoriaEquip = '';
+          item.editandoPrazo = false;
+          renderManutencaoDraft();
+        });
+      });
+      const inpPrazo = row.querySelector('.inp-prazo-coleta');
+      if(inpPrazo) inpPrazo.addEventListener('input', e => item.prazoColetaInput = e.target.value);
+      const linkAlterarPrazo = row.querySelector('.link-alterar-prazo');
+      if(linkAlterarPrazo) linkAlterarPrazo.addEventListener('click', () => { item.editandoPrazo = true; renderManutencaoDraft(); });
     }
     if(!ehServicoGeral){
       row.querySelector('.inp-horimetro').addEventListener('input', e => item.horimetro = e.target.value);
@@ -2415,7 +2495,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(!confirm(`Já existe um registro parecido hoje pra: ${lista}. Confirma salvar mesmo assim?`)) return;
   }
 
-  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false;
+  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false, prazoAtualizado = false;
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral'){
       const texto = item.descricao.trim();
@@ -2437,7 +2517,8 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       if(item.editandoId && item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
         manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
       }
-      const freeText = item.descricao.trim();
+      const ehCbmOleoNormalSub = item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.resultado !== 'Alerta' && item.resultado !== 'Crítico';
+      const freeText = item.descricao.trim() || (ehCbmOleoNormalSub ? 'Amostra coletada' : '');
       subItensSelecionados.forEach((subItem, idx) => {
         const registroAtualizado = {
           id: (idx === 0 && item.editandoId) ? item.editandoId : uid(),
@@ -2445,26 +2526,37 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
           corrigido: item.tipo === 'Corretiva' ? (item.corrigido === true) : null,
           idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : '',
           statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null,
-          resultado: item.tipo === 'CBM' ? (item.resultado || 'Normal') : null
+          resultado: item.tipo === 'CBM' ? (item.resultado || 'Normal') : null,
+          subTipoColeta: item.tipo === 'CBM' ? item.subTipoColeta : null
         };
         if(!manutencoesDiarias[item.itemId]) manutencoesDiarias[item.itemId] = [];
         manutencoesDiarias[item.itemId].push(registroAtualizado);
         manutSalvas++;
+        if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.prazoColetaInput){
+          const dias = parseInt(item.prazoColetaInput, 10);
+          if(dias > 0){ prazosColeta[chavePrazoColeta(item.itemId, subItem, item.subTipoColeta)] = dias; prazoAtualizado = true; }
+        }
       });
       return;
     }
 
+    const ehCbmOleoNormal = item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.resultado !== 'Alerta' && item.resultado !== 'Crítico';
     const textoFinal = usaSeletorPreventivo
       ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
-      : item.descricao.trim();
+      : (item.descricao.trim() || (ehCbmOleoNormal ? 'Amostra coletada' : ''));
     if(!textoFinal) return;
     const registroAtualizado = {
       id: item.editandoId || uid(), data, descricao: textoFinal, horimetro: item.horimetro.trim(), tipo: item.tipo,
       corrigido: item.tipo === 'Corretiva' ? (item.corrigido === true) : null,
       idFluig: item.tipo === 'Corretiva' ? (item.idFluig||'').trim() : '',
       statusEquip: item.tipo === 'Corretiva' ? (item.statusEquip || 'operacional') : null,
-      resultado: item.tipo === 'CBM' ? (item.resultado || 'Normal') : null
+      resultado: item.tipo === 'CBM' ? (item.resultado || 'Normal') : null,
+      subTipoColeta: item.tipo === 'CBM' ? item.subTipoColeta : null
     };
+    if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.prazoColetaInput){
+      const dias = parseInt(item.prazoColetaInput, 10);
+      if(dias > 0){ prazosColeta[chavePrazoColeta(item.itemId, null, item.subTipoColeta)] = dias; prazoAtualizado = true; }
+    }
     if(item.editandoId){
       if(item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
         manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
@@ -2486,6 +2578,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   let okManut = true, okServico = true;
   if(manutSalvas > 0) okManut = await salvarManutencoesDiarias();
   if(servicosSalvos > 0) okServico = await salvarServicosDiarios();
+  if(prazoAtualizado) await salvarPrazosColeta();
   manutencaoRascunho = [];
   renderManutencaoDraft();
   renderPendenciasDiarioTab();
@@ -2545,6 +2638,52 @@ document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
     document.getElementById('btn-consultar-diario').click();
   }
 });
+
+function renderStatusAmostras(){
+  const resultEl = document.getElementById('resultado-consulta');
+  const grupos = {};
+  ALL_EQUIP_ITEMS.forEach(eq => {
+    (manutencoesDiarias[eq.id] || []).filter(m => m.tipo === 'CBM').forEach(m => {
+      const subTipo = m.subTipoColeta || 'oleo';
+      const chave = chavePrazoColeta(eq.id, m.subItem, subTipo);
+      if(!grupos[chave] || m.data > grupos[chave].data){
+        grupos[chave] = { equipId: eq.id, equipNome: eq.nome, subItem: m.subItem, subTipo, data: m.data, resultado: m.resultado };
+      }
+    });
+  });
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const linhas = Object.values(grupos).sort((a,b) => a.data < b.data ? 1 : -1).map(g => {
+    const chavePrazo = chavePrazoColeta(g.equipId, g.subItem, g.subTipo);
+    const prazo = prazosColeta[chavePrazo];
+    let diasTxt = 'Sem prazo definido', cor = '#8896a8';
+    if(prazo){
+      const dataProxima = new Date(g.data+'T00:00:00');
+      dataProxima.setDate(dataProxima.getDate() + prazo);
+      const diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
+      if(diasRestantes < 0){ diasTxt = `vencida há ${Math.abs(diasRestantes)} dias`; cor = '#d64545'; }
+      else if(diasRestantes < prazo * 0.3){ diasTxt = `faltam ${diasRestantes} dias`; cor = '#c98a1f'; }
+      else{ diasTxt = `faltam ${diasRestantes} dias`; cor = '#2a9d5c'; }
+    }
+    const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
+    const nomeExib = g.subItem ? `${g.equipNome}: ${g.subItem}` : g.equipNome;
+    return `<div class="pend-item" style="cursor:default;border-left-color:${cor};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+      <div>
+        <div class="nome" style="color:${cor};">${icone} ${esc(nomeExib)}</div>
+        <div style="font-size:11px;">${esc(g.resultado || 'Normal')} — coletado ${fmtDate(g.data)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="color:${cor};font-size:11px;font-weight:600;">${diasTxt}</span>
+        <span class="link-editar-prazo-status" data-chave="${escA(chavePrazo)}" style="font-size:10.5px;color:var(--accent);text-decoration:underline;cursor:pointer;">Editar prazo</span>
+      </div>
+    </div>`;
+  });
+  if(linhas.length === 0){
+    resultEl.innerHTML = '<div class="busca-resultado-wrap"><p class="empty-hint">Nenhuma coleta (Vibração ou Amostra de Óleo) registrada ainda.</p></div>';
+    return;
+  }
+  resultEl.innerHTML = `<div class="busca-resultado-wrap">${linhas.join('')}</div>`;
+}
+document.getElementById('btn-status-amostras').addEventListener('click', renderStatusAmostras);
 
 document.getElementById('btn-consultar-diario').addEventListener('click', () => {
   const nomeBusca = document.getElementById('h-consulta-equip').value.trim();
@@ -2791,7 +2930,20 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
   if(btnEditarLeitura){ editarLeitura(btnEditarLeitura.dataset.data); return; }
   const btnEditarServico = e.target.closest('[data-editar-servico]');
-  if(btnEditarServico) editarServicoGeral(btnEditarServico.dataset.servico);
+  if(btnEditarServico){ editarServicoGeral(btnEditarServico.dataset.servico); return; }
+  const linkEditarPrazo = e.target.closest('.link-editar-prazo-status');
+  if(linkEditarPrazo){
+    const chave = linkEditarPrazo.dataset.chave;
+    const atual = prazosColeta[chave] || '';
+    const novo = prompt('Novo intervalo em dias até a próxima coleta:', atual);
+    if(novo === null) return;
+    const dias = parseInt(novo, 10);
+    if(!dias || dias <= 0){ showToast('Digite um número válido de dias'); return; }
+    prazosColeta[chave] = dias;
+    await salvarPrazosColeta();
+    showToast('Prazo atualizado');
+    renderStatusAmostras();
+  }
 });
 
 async function excluirManutencao(equipId, recId){
@@ -3290,6 +3442,7 @@ async function loadEntries(){
   await carregarLeiturasOleo();
   await carregarNotasEquipamento();
   await carregarIdsExcluidos();
+  await carregarPrazosColeta();
   await carregarNuvem();
   if(migrarEDeduplicarServicos()) await salvarServicosDiarios();
   mergeReportsSync(PRELOADED_REPORTS);
