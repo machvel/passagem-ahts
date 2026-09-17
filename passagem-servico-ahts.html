@@ -1234,8 +1234,10 @@ let leiturasOleo = {};
 let manutencoesDiarias = {};
 let servicosDiarios = [];
 let prazosColeta = {};
+let tipoOleoEquip = {};
 const EQUIP_IDS_VIBRACAO = ['dg1','dg2','dg3','dg4','red_bb','red_be','bow1','bow2','bow3','stt1','stt2','ger_12','ger_10','ger_0'];
 function chavePrazoColeta(itemId, subItem, subTipo){ return `${itemId}|${subItem||''}|${subTipo}`; }
+function chaveTipoOleo(itemId, subItem){ return `${itemId}|${subItem||''}`; }
 async function carregarPrazosColeta(){
   try{
     const res = await window.storage.get('prazos_coleta_ahts', true);
@@ -1245,6 +1247,16 @@ async function carregarPrazosColeta(){
 async function salvarPrazosColeta(){
   try{ await window.storage.set('prazos_coleta_ahts', JSON.stringify(prazosColeta), true); return true; }
   catch(e){ console.error('Erro ao salvar prazos de coleta:', e); return false; }
+}
+async function carregarTipoOleoEquip(){
+  try{
+    const res = await window.storage.get('tipo_oleo_equip_ahts', true);
+    tipoOleoEquip = res && res.value ? JSON.parse(res.value) : {};
+  }catch(e){ tipoOleoEquip = {}; }
+}
+async function salvarTipoOleoEquip(){
+  try{ await window.storage.set('tipo_oleo_equip_ahts', JSON.stringify(tipoOleoEquip), true); return true; }
+  catch(e){ console.error('Erro ao salvar tipo de óleo:', e); return false; }
 }
 let manutencaoRascunho = [];
 
@@ -1472,6 +1484,7 @@ function renderManutencaoDraft(){
     }
     let subTipoColetaHtml = '';
     let prazoColetaHtml = '';
+    let tipoOleoHtml = '';
     if(usaCBM){
       subTipoColetaHtml = `<div style="flex:1 1 100%;display:flex;gap:6px;">
         ${['vibracao','oleo'].map(st => {
@@ -1506,6 +1519,19 @@ function renderManutencaoDraft(){
             <input type="number" class="inp-prazo-coleta" placeholder="Ex: 90" value="${escA(item.prazoColetaInput || '')}" style="width:140px;">
           </div>`;
         }
+        const chaveOleo = chaveTipoOleo(item.itemId, item.subItens && item.subItens[0]);
+        const oleoExistente = tipoOleoEquip[chaveOleo];
+        if(oleoExistente && !item.editandoTipoOleo){
+          tipoOleoHtml = `<div style="flex:1 1 100%;background:var(--panel-2);border-radius:6px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <span style="font-size:10.5px;color:var(--text-faint);">Óleo já configurado: ${esc(oleoExistente)}</span>
+            <span class="link-alterar-oleo" style="font-size:10.5px;color:var(--accent);text-decoration:underline;cursor:pointer;">alterar</span>
+          </div>`;
+        }else{
+          tipoOleoHtml = `<div style="flex:1 1 100%;">
+            <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:3px;">Tipo de óleo</label>
+            <input type="text" class="inp-tipo-oleo" placeholder="Ex: 15W-40" value="${escA(item.tipoOleoInput || '')}" style="width:200px;">
+          </div>`;
+        }
       }
     }
 
@@ -1526,6 +1552,7 @@ function renderManutencaoDraft(){
       ${statusEquipHtml}
       ${resultadoCbmHtml}
       ${prazoColetaHtml}
+      ${tipoOleoHtml}
       ${corrigidoHtml}
       ${idFluigHtml}
       ${horimetroHtml}
@@ -1625,6 +1652,7 @@ function renderManutencaoDraft(){
           item.itemId = '';
           item.categoriaEquip = '';
           item.editandoPrazo = false;
+          item.editandoTipoOleo = false;
           renderManutencaoDraft();
         });
       });
@@ -1632,6 +1660,10 @@ function renderManutencaoDraft(){
       if(inpPrazo) inpPrazo.addEventListener('input', e => item.prazoColetaInput = e.target.value);
       const linkAlterarPrazo = row.querySelector('.link-alterar-prazo');
       if(linkAlterarPrazo) linkAlterarPrazo.addEventListener('click', () => { item.editandoPrazo = true; renderManutencaoDraft(); });
+      const inpTipoOleo = row.querySelector('.inp-tipo-oleo');
+      if(inpTipoOleo) inpTipoOleo.addEventListener('input', e => item.tipoOleoInput = e.target.value);
+      const linkAlterarOleo = row.querySelector('.link-alterar-oleo');
+      if(linkAlterarOleo) linkAlterarOleo.addEventListener('click', () => { item.editandoTipoOleo = true; renderManutencaoDraft(); });
     }
     if(!ehServicoGeral){
       row.querySelector('.inp-horimetro').addEventListener('input', e => item.horimetro = e.target.value);
@@ -2271,7 +2303,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(!confirm(`Já existe um registro parecido hoje pra: ${lista}. Confirma salvar mesmo assim?`)) return;
   }
 
-  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false, prazoAtualizado = false;
+  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false, prazoAtualizado = false, tipoOleoAtualizado = false;
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral'){
       const texto = item.descricao.trim();
@@ -2312,6 +2344,10 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
           const dias = parseInt(item.prazoColetaInput, 10);
           if(dias > 0){ prazosColeta[chavePrazoColeta(item.itemId, subItem, item.subTipoColeta)] = dias; prazoAtualizado = true; }
         }
+        if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.tipoOleoInput && item.tipoOleoInput.trim()){
+          tipoOleoEquip[chaveTipoOleo(item.itemId, subItem)] = item.tipoOleoInput.trim();
+          tipoOleoAtualizado = true;
+        }
       });
       return;
     }
@@ -2332,6 +2368,10 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.prazoColetaInput){
       const dias = parseInt(item.prazoColetaInput, 10);
       if(dias > 0){ prazosColeta[chavePrazoColeta(item.itemId, null, item.subTipoColeta)] = dias; prazoAtualizado = true; }
+    }
+    if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.tipoOleoInput && item.tipoOleoInput.trim()){
+      tipoOleoEquip[chaveTipoOleo(item.itemId, null)] = item.tipoOleoInput.trim();
+      tipoOleoAtualizado = true;
     }
     if(item.editandoId){
       if(item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
@@ -2354,6 +2394,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   let okManut = true, okServico = true;
   if(manutSalvas > 0) okManut = await salvarManutencoesDiarias();
   if(prazoAtualizado) await salvarPrazosColeta();
+  if(tipoOleoAtualizado) await salvarTipoOleoEquip();
   if(servicosSalvos > 0) okServico = await salvarServicosDiarios();
   manutencaoRascunho = [];
   renderManutencaoDraft();
@@ -3206,6 +3247,7 @@ async function loadEntries(){
   await carregarLeiturasFuel();
   await carregarManutencoesDiarias();
   await carregarPrazosColeta();
+  await carregarTipoOleoEquip();
   await carregarServicosDiarios();
   await carregarLeiturasOleo();
   mergeReportsSync(PRELOADED_REPORTS);
