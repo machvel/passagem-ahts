@@ -800,6 +800,20 @@ const SUBITENS_CBM_OLEO_EXTRA = {
 function subitensParaCbmOleo(itemId){
   return (SUBITENS_POR_EQUIP[itemId] || []).concat(SUBITENS_CBM_OLEO_EXTRA[itemId] || []);
 }
+const MANUSEIO_ANCORA_OLEO_ITENS = [
+  {equipId:'ger_25', subItem:'Tow BB', label:'GEAR TOW#1'},
+  {equipId:'ger_25', subItem:'Tow BE', label:'GEAR TOW#2'},
+  {equipId:'ger_25', subItem:'Principal', label:'GEAR SPCL FWD'},
+  {equipId:'ger_24', subItem:'Burrinho BB', label:'AFT.TUG'},
+  {equipId:'ger_25', subItem:'L.P Winch', label:'L.P WINCH'},
+  {equipId:'ger_22', subItem:'Trolley BB', label:'TROLLEY#1'},
+  {equipId:'ger_22', subItem:'Trolley BE', label:'TROLLEY#2'},
+  {equipId:'ger_23', subItem:null, label:'WINDLESS'},
+  {equipId:'ger_18', subItem:'Triplex BB', label:'TRIPLEX#1'},
+  {equipId:'ger_18', subItem:'Triplex BE', label:'TRIPLEX#2'},
+  {equipId:'ger_19', subItem:null, label:"ALAR'S"}
+];
+function chaveManuseioAncora(label){ return `ancora|${label}`; }
 const EQUIP_IDS_OLEO = Array.from(new Set(Object.keys(MAPA_AMOSTRA_EQUIP).map(k => k.split('|')[0])));
 
 const AMOSTRA_OLEO = ['ME#1','ME#2','ME#3','ME#4','DG#1','DG#2','DG#3','DG#4','RED#1','RED#2','LEME#1','LEME#2',
@@ -1209,12 +1223,32 @@ function buildOleoMultiHtml(item, idsPermitidos){
   const opcoesCategoria = secoesFiltradas.map(sec => `<option value="${escA(sec.key)}" ${sec.key===categoriaAtual?'selected':''}>${esc(sec.titulo)}</option>`).join('');
   const secaoAtual = secoesFiltradas.find(s => s.key === categoriaAtual);
 
-  const botoesEquip = secaoAtual ? secaoAtual.itens.map(it => {
-    const marcado = item.oleoEquips.includes(it.id);
-    return `<div class="oleo-equip-btn" data-equip-id="${escA(it.id)}" style="background:${marcado?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${marcado?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${marcado?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${marcado?'600':'400'};cursor:pointer;white-space:nowrap;">${marcado?'☑':'☐'} ${esc(it.nome)}</div>`;
-  }).join('') : '';
+  const botoesEquip = categoriaAtual === 'manuseio_ancora'
+    ? MANUSEIO_ANCORA_OLEO_ITENS.map(it => {
+        const chave = chaveManuseioAncora(it.label);
+        const marcado = item.oleoEquips.includes(chave);
+        return `<div class="oleo-equip-btn" data-equip-id="${escA(chave)}" style="background:${marcado?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${marcado?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${marcado?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${marcado?'600':'400'};cursor:pointer;white-space:nowrap;">${marcado?'☑':'☐'} ${esc(it.label)}</div>`;
+      }).join('')
+    : (secaoAtual ? secaoAtual.itens.map(it => {
+        const marcado = item.oleoEquips.includes(it.id);
+        return `<div class="oleo-equip-btn" data-equip-id="${escA(it.id)}" style="background:${marcado?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${marcado?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${marcado?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${marcado?'600':'400'};cursor:pointer;white-space:nowrap;">${marcado?'☑':'☐'} ${esc(it.nome)}</div>`;
+      }).join('') : '');
 
   const cardsHtml = item.oleoEquips.map(equipId => {
+    if(equipId.startsWith('ancora|')){
+      const label = equipId.slice('ancora|'.length);
+      const info = MANUSEIO_ANCORA_OLEO_ITENS.find(it => it.label === label);
+      if(!info) return '';
+      const det = item.oleoResultados[equipId] || (item.oleoResultados[equipId] = {resultado:'Normal', descricao:''});
+      if(!det.horimetro){
+        const ultimaLeitura = getUltimaLeitura(info.equipId);
+        if(ultimaLeitura) det.horimetro = ultimaLeitura.valor;
+      }
+      const prazoInfo = { existente: prazosColeta[chavePrazoColeta(info.equipId, info.subItem, 'oleo')] };
+      const oleoInfo = { existente: tipoOleoEquip[chaveTipoOleo(info.equipId, info.subItem)] };
+      const horimetroInfo = { ultima: getUltimaAmostraOleo(info.equipId, info.subItem) };
+      return renderOleoResultCard(equipId, label, det, prazoInfo, oleoInfo, horimetroInfo);
+    }
     const equipInfo = EQUIP_ITEM_MAP[equipId];
     if(!equipInfo) return '';
     const temSubitens = !!SUBITENS_POR_EQUIP[equipId] || !!SUBITENS_CBM_OLEO_EXTRA[equipId];
@@ -2785,7 +2819,33 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       return;
     }
     if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo'){
-      (item.oleoEquips || []).forEach(equipId => {
+      (item.oleoEquips || []).forEach(chaveEquip => {
+        if(chaveEquip.startsWith('ancora|')){
+          const label = chaveEquip.slice('ancora|'.length);
+          const info = MANUSEIO_ANCORA_OLEO_ITENS.find(it => it.label === label);
+          if(!info) return;
+          const det = item.oleoResultados[chaveEquip] || {resultado:'Normal', descricao:''};
+          const precisaDescricao = det.resultado === 'Alerta' || det.resultado === 'Crítico';
+          const descricaoFinal = (det.descricao || '').trim() || (precisaDescricao ? '' : 'Amostra coletada');
+          if(precisaDescricao && !descricaoFinal){ descricaoFaltando = true; return; }
+          if(!manutencoesDiarias[info.equipId]) manutencoesDiarias[info.equipId] = [];
+          manutencoesDiarias[info.equipId].push({
+            id: uid(), data, descricao: descricaoFinal, subItem: info.subItem, horimetro: (det.horimetro || '').toString().trim(), tipo: 'CBM',
+            corrigido: null, idFluig: '', statusEquip: null,
+            resultado: det.resultado, subTipoColeta: 'oleo'
+          });
+          manutSalvas++;
+          if(det.prazoInput){
+            const dias = parseInt(det.prazoInput, 10);
+            if(dias > 0){ prazosColeta[chavePrazoColeta(info.equipId, info.subItem, 'oleo')] = dias; prazoAtualizado = true; }
+          }
+          if(det.tipoOleoInput && det.tipoOleoInput.trim()){
+            tipoOleoEquip[chaveTipoOleo(info.equipId, info.subItem)] = det.tipoOleoInput.trim();
+            tipoOleoAtualizado = true;
+          }
+          return;
+        }
+        const equipId = chaveEquip;
         const temSubitens = !!SUBITENS_POR_EQUIP[equipId];
         const combos = temSubitens ? (item.oleoSubItens[equipId] || []).map(s => ({subItem: s, chave: `${equipId}|${s}`})) : [{subItem: null, chave: equipId}];
         combos.forEach(({subItem, chave}) => {
