@@ -3019,6 +3019,11 @@ document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
   }
 });
 
+function corResultadoAmostra(resultado){
+  if(resultado === 'Alerta') return { bg: '#f0c020', fg: '#332405' };
+  if(resultado === 'Crítico') return { bg: '#e0392b', fg: '#fff' };
+  return { bg: '#2ecc71', fg: '#fff' };
+}
 function renderStatusAmostras(){
   const resultEl = document.getElementById('resultado-consulta');
   const grupos = {};
@@ -3035,26 +3040,24 @@ function renderStatusAmostras(){
   const linhas = Object.values(grupos).sort((a,b) => a.data < b.data ? 1 : -1).map(g => {
     const chavePrazo = chavePrazoColeta(g.equipId, g.subItem, g.subTipo);
     const prazo = prazosColeta[chavePrazo];
-    let diasTxt = 'Sem prazo definido', cor = '#8896a8';
+    let diasTxt = 'sem prazo definido';
     if(prazo){
       const dataProxima = new Date(g.data+'T00:00:00');
       dataProxima.setDate(dataProxima.getDate() + prazo);
       const diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
-      if(diasRestantes < 0){ diasTxt = `vencida há ${Math.abs(diasRestantes)} dias`; cor = '#d64545'; }
-      else if(diasRestantes < prazo * 0.3){ diasTxt = `faltam ${diasRestantes} dias`; cor = '#c98a1f'; }
-      else{ diasTxt = `faltam ${diasRestantes} dias`; cor = '#2a9d5c'; }
+      diasTxt = diasRestantes < 0 ? `vencida há ${Math.abs(diasRestantes)} dias` : `faltam ${diasRestantes} dias`;
     }
     const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
     const nomeExib = g.subItem ? `${g.equipNome}: ${g.subItem}` : g.equipNome;
-    return `<div class="pend-item" style="cursor:default;border-left-color:${cor};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+    const resultadoTxt = g.resultado || 'Normal';
+    const corTag = corResultadoAmostra(resultadoTxt);
+    return `<div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <div>
-        <div class="nome" style="color:${cor};">${icone} ${esc(nomeExib)}</div>
-        <div style="font-size:11px;">${esc(g.resultado || 'Normal')} — coletado ${fmtDate(g.data)}</div>
+        <div style="color:#1a2332;font-size:12px;font-weight:600;">${icone} ${esc(nomeExib)}</div>
+        <div style="color:#6b7688;font-size:10px;">coletado ${fmtDate(g.data)} — ${diasTxt}</div>
+        <span class="link-editar-prazo-status" data-chave="${escA(chavePrazo)}" style="font-size:9.5px;color:#3b6fd6;text-decoration:underline;cursor:pointer;">editar prazo</span>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="color:${cor};font-size:11px;font-weight:600;">${diasTxt}</span>
-        <span class="link-editar-prazo-status" data-chave="${escA(chavePrazo)}" style="font-size:10.5px;color:var(--accent);text-decoration:underline;cursor:pointer;">Editar prazo</span>
-      </div>
+      <div style="background:${corTag.bg};color:${corTag.fg};font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:5px;letter-spacing:.02em;white-space:nowrap;">${esc(resultadoTxt.toUpperCase())}</div>
     </div>`;
   });
   if(linhas.length === 0){
