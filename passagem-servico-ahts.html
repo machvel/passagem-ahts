@@ -535,17 +535,20 @@ const SECOES = [
     {id:'ger_15', nome:'Watermaker', tipo:'gerais'},
     {id:'ger_16', nome:'Ventilação/Exaustão', tipo:'gerais'},
     {id:'ger_17', nome:'Aquecedor de Água', tipo:'gerais'},
-    {id:'ger_18', nome:'Triplex', tipo:'gerais'},
-    {id:'ger_19', nome:'Alars', tipo:'gerais'},
     {id:'ger_20', nome:'Bote de Resgate', tipo:'gerais'},
     {id:'ger_21', nome:'Ups/Baterias', tipo:'gerais'},
-    {id:'ger_22', nome:'Trolley', tipo:'gerais'},
-    {id:'ger_23', nome:'Anchor Windlass', tipo:'gerais'},
-    {id:'ger_24', nome:'Tugger', tipo:'gerais'},
-    {id:'ger_25', nome:'Guincho', tipo:'gerais'},
     {id:'ger_26', nome:'DGE', tipo:'gerais'},
     {id:'ger_27', nome:'Sistema de Lastro', tipo:'gerais'},
     {id:'ger_28', nome:'Sistema de Fuel', tipo:'gerais'}
+  ]},
+  {key:'manuseio_ancora', titulo:'Manuseio de Âncora', itens:[
+    {id:'ger_25', nome:'Guincho', tipo:'gerais'},
+    {id:'ger_24', nome:'Tugger', tipo:'gerais'},
+    {id:'ger_22', nome:'Trolley', tipo:'gerais'},
+    {id:'ger_23', nome:'Anchor Windlass', tipo:'gerais'},
+    {id:'ger_29', nome:'Bombas Hidráulicas', tipo:'gerais'},
+    {id:'ger_18', nome:'Triplex', tipo:'gerais'},
+    {id:'ger_19', nome:'Alars', tipo:'gerais'}
   ]}
 ];
 
@@ -561,10 +564,13 @@ const MAPA_AMOSTRA_EQUIP = {
   'bow1':'BOW#1', 'bow2':'BOW#2', 'bow3':'BOW#3',
   'stt1':'STT#1', 'stt2':'STT#2',
   'cpp_bb':'CPP#1', 'cpp_be':'CPP#2',
-  'ger_6':'SERVO', 'ger_19':"ALAR'S", 'ger_26':'DGE', 'ger_23':'WINDLESS',
+  'ger_6':'SERVO', 'ger_19':"ALAR'S", 'ger_26':'DGE', 'ger_23':'WINDLESS', 'ger_20':'DAVIT',
   'ger_18|Triplex BB':'TRIPLEX#1', 'ger_18|Triplex BE':'TRIPLEX#2',
   'comp|Compressor de Ar 1':'COMP#1', 'comp|Compressor de Ar 2':'COMP#2',
   'ger_22|Trolley BB':'TROLLEY#1', 'ger_22|Trolley BE':'TROLLEY#2',
+  'ger_25|Principal':'GEAR SPCL FWD', 'ger_25|Tow BB':'GEAR TOW#1', 'ger_25|Tow BE':'GEAR TOW#2',
+  'ger_25|L.P Winch':'L.P WINCH',
+  'ger_24|Burrinho BB':'AFT.TUG', 'ger_24|Burrinho BE':'AFT.TUG',
   'ger_12|1P':'BRG PS#1', 'ger_12|2P':'BRG PS#2', 'ger_12|3P':'BRG PS#3',
   'ger_12|1S':'BRG SB#1', 'ger_12|2S':'BRG SB#2', 'ger_12|3S':'BRG SB#3',
   'ger_12|DE DG2':'DE DG#2', 'ger_12|NDE DG2':'NDE DG#2',
@@ -573,6 +579,18 @@ const MAPA_AMOSTRA_EQUIP = {
   'ger_12|DE SG2':'DE SG#2', 'ger_12|NDE SG2':'NDE SG#2'
 };
 function chaveAmostraMapa(itemId, subItem){ return subItem ? `${itemId}|${subItem}` : itemId; }
+const LABEL_CBM_OLEO_SUBITEM = {
+  'ger_25|Principal': 'GEAR SPCL FWD',
+  'ger_25|Tow BB': 'GEAR TOW#1',
+  'ger_25|Tow BE': 'GEAR TOW#2'
+};
+function labelCbmOleoSubitem(itemId, subItem){ return LABEL_CBM_OLEO_SUBITEM[`${itemId}|${subItem}`] || subItem; }
+const SUBITENS_CBM_OLEO_EXTRA = {
+  'ger_25': ['L.P Winch']
+};
+function subitensParaCbmOleo(itemId){
+  return (SUBITENS_POR_EQUIP[itemId] || []).concat(SUBITENS_CBM_OLEO_EXTRA[itemId] || []);
+}
 const EQUIP_IDS_OLEO = Array.from(new Set(Object.keys(MAPA_AMOSTRA_EQUIP).map(k => k.split('|')[0])));
 
 const AMOSTRA_OLEO = ['ME#1','ME#2','ME#3','ME#4','DG#1','DG#2','DG#3','DG#4','RED#1','RED#2','LEME#1','LEME#2',
@@ -921,7 +939,8 @@ const SUBITENS_POR_EQUIP = {
   'ger_21': ['UPS A','UPS B','UPS C','UPS D','UPS E','UPS F','UPS G','UPS H','UPS J','UPS K','UPS L','UPS M','AUTO PMS A','AUTO PMS B','IBS/TCS 1','IBS/TCS 2','IBS/TCS 3','BTT 1','BTT 2','BTT 3','STT 1','STT2','AUXILIAR'],
   'ger_22': ['Trolley BB','Trolley BE'],
   'ger_24': ['Burrinho BB','Burrinho BE','Cabrestate BB','Cabrestate BE'],
-  'ger_25': ['Principal','Tow BB','Tow BE','Sec. BB','Sec. BE']
+  'ger_25': ['Principal','Tow BB','Tow BE','Sec. BB','Sec. BE'],
+  'ger_29': ['Bomba 48','Bomba 49','Bomba 50','Bomba 51','Bomba 52','Bomba 53']
 };
 
 function botaoDuplo(classPrefix, opcoes, valorAtual){
@@ -937,7 +956,7 @@ function secaoDoEquip(itemId){
   return SECOES.find(sec => sec.itens.some(it => it.id === itemId));
 }
 
-function renderOleoResultCard(chave, nomeExibicao, det, prazoInfo, oleoInfo){
+function renderOleoResultCard(chave, nomeExibicao, det, prazoInfo, oleoInfo, horimetroInfo){
   const opcoes = ['Normal','Alerta','Crítico'];
   const botoes = opcoes.map(o => {
     const ativo = det.resultado === o;
@@ -957,12 +976,17 @@ function renderOleoResultCard(chave, nomeExibicao, det, prazoInfo, oleoInfo){
   }else{
     oleoHtml = `Tipo de óleo: <input type="text" class="inp-oleo-tipo" data-chave="${escA(chave)}" placeholder="Ex: 15W-40" value="${escA(det.tipoOleoInput || '')}" style="width:80px;font-size:9px;padding:2px 4px;">`;
   }
+  const horimetroHtmlCard = `<span>Horímetro: <input type="text" class="inp-oleo-horimetro" data-chave="${escA(chave)}" value="${escA(det.horimetro || '')}" style="width:65px;font-size:9px;padding:2px 4px;"></span>`;
+  const dicaHtml = (horimetroInfo && horimetroInfo.ultima && det.horimetro && !isNaN(parseFloat(det.horimetro) - parseFloat(horimetroInfo.ultima.horimetro)))
+    ? `<div style="font-size:9px;color:var(--text-faint);width:100%;margin-top:3px;">Última amostra: ${esc(horimetroInfo.ultima.horimetro)}h (há ${parseFloat(det.horimetro) - parseFloat(horimetroInfo.ultima.horimetro)}h)</div>`
+    : '';
 
   return `<div style="background:var(--panel-2);border-radius:6px;padding:8px 10px;margin-bottom:6px;">
     <div style="color:var(--text);font-size:11px;font-weight:600;margin-bottom:5px;">${esc(nomeExibicao)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">${botoes}</div>
     ${precisaDescricao ? `<input type="text" class="inp-oleo-descricao" data-chave="${escA(chave)}" placeholder="Descreva o que foi encontrado" value="${escA(det.descricao||'')}" style="width:100%;margin-bottom:5px;">` : ''}
-    <div style="font-size:9px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:10px;align-items:center;">${prazoHtml}${oleoHtml}</div>
+    <div style="font-size:9px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:10px;align-items:center;">${prazoHtml}${oleoHtml}${horimetroHtmlCard}</div>
+    ${dicaHtml}
   </div>`;
 }
 
@@ -984,21 +1008,26 @@ function buildOleoMultiHtml(item, idsPermitidos){
   const cardsHtml = item.oleoEquips.map(equipId => {
     const equipInfo = EQUIP_ITEM_MAP[equipId];
     if(!equipInfo) return '';
-    const temSubitens = !!SUBITENS_POR_EQUIP[equipId];
+    const temSubitens = !!SUBITENS_POR_EQUIP[equipId] || !!SUBITENS_CBM_OLEO_EXTRA[equipId];
     if(temSubitens){
       const subSelecionados = item.oleoSubItens[equipId] || [];
-      const opcoesSub = SUBITENS_POR_EQUIP[equipId].map(s => {
+      const opcoesSub = subitensParaCbmOleo(equipId).map(s => {
         const marcado = subSelecionados.includes(s);
         return `<label style="display:flex;align-items:center;gap:4px;background:var(--surface-2,var(--bg));border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-size:10px;cursor:pointer;">
-          <input type="checkbox" class="chk-oleo-subitem" data-equip-id="${escA(equipId)}" value="${escA(s)}" ${marcado?'checked':''}> ${esc(s)}
+          <input type="checkbox" class="chk-oleo-subitem" data-equip-id="${escA(equipId)}" value="${escA(s)}" ${marcado?'checked':''}> ${esc(labelCbmOleoSubitem(equipId, s))}
         </label>`;
       }).join('');
       const subCards = subSelecionados.map(sub => {
         const chave = `${equipId}|${sub}`;
-        const det = item.oleoResultados[chave] || {resultado:'Normal', descricao:''};
+        const det = item.oleoResultados[chave] || (item.oleoResultados[chave] = {resultado:'Normal', descricao:''});
+        if(!det.horimetro){
+          const ultimaLeitura = getUltimaLeitura(equipId);
+          if(ultimaLeitura) det.horimetro = ultimaLeitura.valor;
+        }
         const prazoInfo = { existente: prazosColeta[chavePrazoColeta(equipId, sub, 'oleo')] };
         const oleoInfo = { existente: tipoOleoEquip[chaveTipoOleo(equipId, sub)] };
-        return renderOleoResultCard(chave, `${equipInfo.nome}: ${sub}`, det, prazoInfo, oleoInfo);
+        const horimetroInfo = { ultima: getUltimaAmostraOleo(equipId, sub) };
+        return renderOleoResultCard(chave, `${equipInfo.nome}: ${labelCbmOleoSubitem(equipId, sub)}`, det, prazoInfo, oleoInfo, horimetroInfo);
       }).join('');
       return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">${esc(equipInfo.nome)} — selecione o(s) item(ns)</div>
@@ -1006,10 +1035,15 @@ function buildOleoMultiHtml(item, idsPermitidos){
         ${subCards}
       </div>`;
     }else{
-      const det = item.oleoResultados[equipId] || {resultado:'Normal', descricao:''};
+      const det = item.oleoResultados[equipId] || (item.oleoResultados[equipId] = {resultado:'Normal', descricao:''});
+      if(!det.horimetro){
+        const ultimaLeitura = getUltimaLeitura(equipId);
+        if(ultimaLeitura) det.horimetro = ultimaLeitura.valor;
+      }
       const prazoInfo = { existente: prazosColeta[chavePrazoColeta(equipId, null, 'oleo')] };
       const oleoInfo = { existente: tipoOleoEquip[chaveTipoOleo(equipId, null)] };
-      return renderOleoResultCard(equipId, equipInfo.nome, det, prazoInfo, oleoInfo);
+      const horimetroInfo = { ultima: getUltimaAmostraOleo(equipId, null) };
+      return renderOleoResultCard(equipId, equipInfo.nome, det, prazoInfo, oleoInfo, horimetroInfo);
     }
   }).join('');
 
@@ -1417,6 +1451,18 @@ function getUltimaLeitura(itId){
   return [...arr].sort((a,b) => b.data.localeCompare(a.data))[0];
 }
 
+function getUltimaManutPorTipo(itemId, manutTipo, excluirId){
+  const arr = (manutencoesDiarias[itemId] || []).filter(m => m.tipo === 'Preventiva' && m.descricao === manutTipo && m.horimetro && m.id !== excluirId);
+  if(!arr.length) return null;
+  return [...arr].sort((a,b) => b.data.localeCompare(a.data))[0];
+}
+
+function getUltimaAmostraOleo(itemId, subItem, excluirId){
+  const arr = (manutencoesDiarias[itemId] || []).filter(m => m.tipo === 'CBM' && (m.subTipoColeta || 'oleo') === 'oleo' && (m.subItem || null) === (subItem || null) && m.horimetro && m.id !== excluirId);
+  if(!arr.length) return null;
+  return [...arr].sort((a,b) => b.data.localeCompare(a.data))[0];
+}
+
 function getUltimaLeituraFuel(itId){
   const arr = leiturasFuel[itId] || [];
   if(!arr.length) return null;
@@ -1547,6 +1593,21 @@ function renderManutencaoDraft(){
       </div>`;
     }else if(usaSeletorPreventivo){
       const opcoes = [...equipSelecionado.horas, ...equipSelecionado.filtros, 'Outros'];
+      const ehTrocaOleoFixa = item.manutTipo && item.manutTipo === INTERVALO_FIXO[item.itemId];
+      let dicaHorimetroHtml = '';
+      if(ehTrocaOleoFixa){
+        if(!item.horimetro){
+          const ultimaLeitura = getUltimaLeitura(item.itemId);
+          if(ultimaLeitura) item.horimetro = ultimaLeitura.valor;
+        }
+        const ultimaTroca = getUltimaManutPorTipo(item.itemId, item.manutTipo, item.editandoId);
+        if(ultimaTroca && item.horimetro){
+          const diff = parseFloat(item.horimetro) - parseFloat(ultimaTroca.horimetro);
+          if(!isNaN(diff)){
+            dicaHorimetroHtml = `<div style="flex:1 1 100%;font-size:10px;color:var(--text-faint);">Última troca de ${esc(item.manutTipo)}: ${esc(ultimaTroca.horimetro)}h (há ${diff}h)</div>`;
+          }
+        }
+      }
       campoDetalheHtml = `<div style="flex:1 1 100%;">
         <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:6px;">Tipo de manutenção preventiva</label>
         <div class="grid-preventiva" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-bottom:8px;">
@@ -1557,12 +1618,8 @@ function renderManutencaoDraft(){
           }).join('')}
         </div>
         ${item.manutTipo === 'Outros' ? `<input type="text" class="campo-outros" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="width:100%;">` : ''}
+        ${dicaHorimetroHtml}
       </div>`;
-    }else if(usaCBM && item.subTipoColeta === 'oleo'){
-      const precisaDescricao = item.resultado === 'Alerta' || item.resultado === 'Crítico';
-      campoDetalheHtml = precisaDescricao
-        ? `<input type="text" class="campo-detalhe" placeholder="Descreva o que foi encontrado na análise" value="${escA(item.descricao)}" style="flex:1 1 100%;">`
-        : '';
     }else if(usaMultiOleo){
       campoDetalheHtml = '';
     }else{
@@ -1739,6 +1796,13 @@ function renderManutencaoDraft(){
           const chave = inp.dataset.chave;
           if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
           item.oleoResultados[chave].tipoOleoInput = e.target.value;
+        });
+      });
+      row.querySelectorAll('.inp-oleo-horimetro').forEach(inp => {
+        inp.addEventListener('input', e => {
+          const chave = inp.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].horimetro = e.target.value;
         });
       });
       row.querySelectorAll('.link-oleo-alterar-tipo').forEach(link => {
@@ -2501,7 +2565,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
           if(precisaDescricao && !descricaoFinal){ descricaoFaltando = true; return; }
           if(!manutencoesDiarias[equipId]) manutencoesDiarias[equipId] = [];
           manutencoesDiarias[equipId].push({
-            id: uid(), data, descricao: descricaoFinal, subItem, horimetro: '', tipo: 'CBM',
+            id: uid(), data, descricao: descricaoFinal, subItem, horimetro: (det.horimetro || '').toString().trim(), tipo: 'CBM',
             corrigido: null, idFluig: '', statusEquip: null,
             resultado: det.resultado, subTipoColeta: 'oleo'
           });
