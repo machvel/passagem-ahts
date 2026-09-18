@@ -782,6 +782,7 @@ const MAPA_AMOSTRA_EQUIP = {
   'ger_12|DE SG2':'DE SG#2', 'ger_12|NDE SG2':'NDE SG#2'
 };
 function chaveAmostraMapa(itemId, subItem){ return subItem ? `${itemId}|${subItem}` : itemId; }
+const EQUIP_IDS_OLEO = Array.from(new Set(Object.keys(MAPA_AMOSTRA_EQUIP).map(k => k.split('|')[0])));
 
 const AMOSTRA_OLEO = ['ME#1','ME#2','ME#3','ME#4','DG#1','DG#2','DG#3','DG#4','RED#1','RED#2','LEME#1','LEME#2',
   'BOW#1','BOW#2','BOW#3','STT#1','STT#2','SERVO','L.P WINCH','AFT.TUG','WINDLESS','DGE','DAVIT',
@@ -1143,6 +1144,94 @@ function botaoDuplo(classPrefix, opcoes, valorAtual){
 
 function secaoDoEquip(itemId){
   return SECOES.find(sec => sec.itens.some(it => it.id === itemId));
+}
+
+function renderOleoResultCard(chave, nomeExibicao, det, prazoInfo, oleoInfo){
+  const opcoes = ['Normal','Alerta','Crítico'];
+  const botoes = opcoes.map(o => {
+    const ativo = det.resultado === o;
+    return `<div class="btn-oleo-resultado" data-chave="${escA(chave)}" data-resultado="${escA(o)}" style="background:${ativo?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${ativo?'var(--accent)':'var(--border)'};border-radius:4px;padding:4px 8px;color:${ativo?'var(--accent)':'var(--text-dim)'};font-size:9.5px;font-weight:${ativo?'600':'400'};cursor:pointer;">${o}</div>`;
+  }).join('');
+  const precisaDescricao = det.resultado === 'Alerta' || det.resultado === 'Crítico';
+
+  let prazoHtml = '';
+  if(prazoInfo.existente && !det.editandoPrazo){
+    prazoHtml = `<span style="color:var(--text-faint);">Prazo: a cada ${prazoInfo.existente} dias</span> <span class="link-oleo-alterar-prazo" data-chave="${escA(chave)}" style="color:var(--accent);text-decoration:underline;cursor:pointer;">alterar</span>`;
+  }else{
+    prazoHtml = `Prazo (dias): <input type="number" class="inp-oleo-prazo" data-chave="${escA(chave)}" placeholder="Ex: 90" value="${escA(det.prazoInput || '')}" style="width:55px;font-size:9px;padding:2px 4px;">`;
+  }
+  let oleoHtml = '';
+  if(oleoInfo.existente && !det.editandoOleo){
+    oleoHtml = `<span style="color:var(--text-faint);">Óleo: ${esc(oleoInfo.existente)}</span> <span class="link-oleo-alterar-tipo" data-chave="${escA(chave)}" style="color:var(--accent);text-decoration:underline;cursor:pointer;">alterar</span>`;
+  }else{
+    oleoHtml = `Tipo de óleo: <input type="text" class="inp-oleo-tipo" data-chave="${escA(chave)}" placeholder="Ex: 15W-40" value="${escA(det.tipoOleoInput || '')}" style="width:80px;font-size:9px;padding:2px 4px;">`;
+  }
+
+  return `<div style="background:var(--panel-2);border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+    <div style="color:var(--text);font-size:11px;font-weight:600;margin-bottom:5px;">${esc(nomeExibicao)}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">${botoes}</div>
+    ${precisaDescricao ? `<input type="text" class="inp-oleo-descricao" data-chave="${escA(chave)}" placeholder="Descreva o que foi encontrado" value="${escA(det.descricao||'')}" style="width:100%;margin-bottom:5px;">` : ''}
+    <div style="font-size:9px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:10px;align-items:center;">${prazoHtml}${oleoHtml}</div>
+  </div>`;
+}
+
+function buildOleoMultiHtml(item, idsPermitidos){
+  if(!item.oleoEquips) item.oleoEquips = [];
+  if(!item.oleoSubItens) item.oleoSubItens = {};
+  if(!item.oleoResultados) item.oleoResultados = {};
+
+  const categoriaAtual = item.categoriaEquip || '';
+  const secoesFiltradas = SECOES.map(sec => ({...sec, itens: sec.itens.filter(it => idsPermitidos.includes(it.id))})).filter(sec => sec.itens.length);
+  const opcoesCategoria = secoesFiltradas.map(sec => `<option value="${escA(sec.key)}" ${sec.key===categoriaAtual?'selected':''}>${esc(sec.titulo)}</option>`).join('');
+  const secaoAtual = secoesFiltradas.find(s => s.key === categoriaAtual);
+
+  const botoesEquip = secaoAtual ? secaoAtual.itens.map(it => {
+    const marcado = item.oleoEquips.includes(it.id);
+    return `<div class="oleo-equip-btn" data-equip-id="${escA(it.id)}" style="background:${marcado?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${marcado?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${marcado?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${marcado?'600':'400'};cursor:pointer;white-space:nowrap;">${marcado?'☑':'☐'} ${esc(it.nome)}</div>`;
+  }).join('') : '';
+
+  const cardsHtml = item.oleoEquips.map(equipId => {
+    const equipInfo = EQUIP_ITEM_MAP[equipId];
+    if(!equipInfo) return '';
+    const temSubitens = !!SUBITENS_POR_EQUIP[equipId];
+    if(temSubitens){
+      const subSelecionados = item.oleoSubItens[equipId] || [];
+      const opcoesSub = SUBITENS_POR_EQUIP[equipId].map(s => {
+        const marcado = subSelecionados.includes(s);
+        return `<label style="display:flex;align-items:center;gap:4px;background:var(--surface-2,var(--bg));border:1px solid var(--border);border-radius:4px;padding:5px 7px;font-size:10px;cursor:pointer;">
+          <input type="checkbox" class="chk-oleo-subitem" data-equip-id="${escA(equipId)}" value="${escA(s)}" ${marcado?'checked':''}> ${esc(s)}
+        </label>`;
+      }).join('');
+      const subCards = subSelecionados.map(sub => {
+        const chave = `${equipId}|${sub}`;
+        const det = item.oleoResultados[chave] || {resultado:'Normal', descricao:''};
+        const prazoInfo = { existente: prazosColeta[chavePrazoColeta(equipId, sub, 'oleo')] };
+        const oleoInfo = { existente: tipoOleoEquip[chaveTipoOleo(equipId, sub)] };
+        return renderOleoResultCard(chave, `${equipInfo.nome}: ${sub}`, det, prazoInfo, oleoInfo);
+      }).join('');
+      return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">${esc(equipInfo.nome)} — selecione o(s) item(ns)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">${opcoesSub}</div>
+        ${subCards}
+      </div>`;
+    }else{
+      const det = item.oleoResultados[equipId] || {resultado:'Normal', descricao:''};
+      const prazoInfo = { existente: prazosColeta[chavePrazoColeta(equipId, null, 'oleo')] };
+      const oleoInfo = { existente: tipoOleoEquip[chaveTipoOleo(equipId, null)] };
+      return renderOleoResultCard(equipId, equipInfo.nome, det, prazoInfo, oleoInfo);
+    }
+  }).join('');
+
+  return `<div style="flex:1 1 100%;">
+    <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Categoria</label>
+    <select class="sel-oleo-categoria" style="width:100%;margin-bottom:8px;">
+      <option value="">Categoria...</option>
+      ${opcoesCategoria}
+    </select>
+    ${secaoAtual ? `<label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Marque um ou mais equipamentos</label>
+    <div class="oleo-equip-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${botoesEquip}</div>` : ''}
+    ${item.oleoEquips.length ? `<label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:6px;">Resultado de cada um</label>${cardsHtml}` : ''}
+  </div>`;
 }
 
 function equipSelectorHtml(classPrefix, categoriaAtual, itemIdAtual, permiteVazio, idsPermitidos){
@@ -1623,27 +1712,39 @@ function renderManutencaoDraft(){
     row.className = 'list-item';
 
     const ehServicoGeral = item.tipo === 'Serviço Geral';
-    if(!ehServicoGeral && item.categoriaEquip && !item.itemId){
+    const usaCBM = item.tipo === 'CBM';
+    if(usaCBM && !item.subTipoColeta) item.subTipoColeta = 'oleo';
+    let idsPermitidosCBM = null;
+    if(usaCBM && item.subTipoColeta === 'vibracao') idsPermitidosCBM = EQUIP_IDS_VIBRACAO;
+    else if(usaCBM && item.subTipoColeta === 'oleo') idsPermitidosCBM = EQUIP_IDS_OLEO;
+    const usaMultiOleo = usaCBM && item.subTipoColeta === 'oleo';
+
+    if(!usaMultiOleo && idsPermitidosCBM && item.itemId && !idsPermitidosCBM.includes(item.itemId)){
+      item.itemId = '';
+      item.categoriaEquip = '';
+    }
+    if(!usaMultiOleo && !ehServicoGeral && item.categoriaEquip && !item.itemId){
       const secaoDefault = SECOES.find(s => s.key === item.categoriaEquip);
-      if(secaoDefault && secaoDefault.itens.length) item.itemId = secaoDefault.itens[0].id;
+      if(secaoDefault && secaoDefault.itens.length){
+        const itensValidos = idsPermitidosCBM ? secaoDefault.itens.filter(it => idsPermitidosCBM.includes(it.id)) : secaoDefault.itens;
+        if(itensValidos.length) item.itemId = itensValidos[0].id;
+      }
     }
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const ehMotor = equipSelecionado && equipSelecionado.tipo === 'motor';
     const usaSeletorPreventivo = !ehServicoGeral && ehMotor && item.tipo === 'Preventiva';
-    const usaSubItens = !ehServicoGeral && !!SUBITENS_POR_EQUIP[item.itemId];
+    const usaSubItens = !usaMultiOleo && !ehServicoGeral && !!SUBITENS_POR_EQUIP[item.itemId];
     const usaCorrigido = item.tipo === 'Corretiva';
-    const usaCBM = item.tipo === 'CBM';
-    if(usaCBM && !item.subTipoColeta) item.subTipoColeta = 'oleo';
-    if(usaCBM && item.subTipoColeta === 'vibracao' && item.itemId && !EQUIP_IDS_VIBRACAO.includes(item.itemId)){
-      item.itemId = '';
-      item.categoriaEquip = '';
-    }
 
     let equipHtml = '';
-    if(!ehServicoGeral){
+    if(!usaMultiOleo && !ehServicoGeral){
       const categoriaAtual = item.categoriaEquip || (secaoDoEquip(item.itemId) || {}).key || '';
-      const idsPermitidos = (usaCBM && item.subTipoColeta === 'vibracao') ? EQUIP_IDS_VIBRACAO : null;
-      equipHtml = equipSelectorHtml('sel-equip', categoriaAtual, item.itemId, false, idsPermitidos);
+      equipHtml = equipSelectorHtml('sel-equip', categoriaAtual, item.itemId, false, idsPermitidosCBM);
+    }
+
+    let oleoMultiHtml = '';
+    if(usaMultiOleo){
+      oleoMultiHtml = buildOleoMultiHtml(item, idsPermitidosCBM);
     }
 
     let campoDetalheHtml;
@@ -1688,11 +1789,8 @@ function renderManutencaoDraft(){
         </div>
         ${item.manutTipo === 'Outros' ? `<input type="text" class="campo-outros" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="width:100%;">` : ''}
       </div>`;
-    }else if(usaCBM && item.subTipoColeta === 'oleo'){
-      const precisaDescricao = item.resultado === 'Alerta' || item.resultado === 'Crítico';
-      campoDetalheHtml = precisaDescricao
-        ? `<input type="text" class="campo-detalhe" placeholder="Descreva o que foi encontrado na análise" value="${escA(item.descricao)}" style="flex:1 1 100%;">`
-        : '';
+    }else if(usaMultiOleo){
+      campoDetalheHtml = '';
     }else{
       campoDetalheHtml = `<input type="text" class="campo-detalhe" placeholder="Descreva a manutenção" value="${escA(item.descricao)}" style="flex:1 1 100%;">`;
     }
@@ -1724,12 +1822,14 @@ function renderManutencaoDraft(){
           return `<div class="btn-subtipo-coleta" data-subtipo="${st}" style="flex:1;background:${ativo?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${ativo?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px;text-align:center;color:${ativo?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${ativo?'600':'400'};cursor:pointer;">${label}</div>`;
         }).join('')}
       </div>`;
-      resultadoCbmHtml = `<select class="sel-resultado-cbm" style="flex:0 0 150px;">
-        <option value="Normal" ${item.resultado !== 'Alerta' && item.resultado !== 'Crítico' ? 'selected' : ''}>Normal</option>
-        <option value="Alerta" ${item.resultado === 'Alerta' ? 'selected' : ''}>Alerta</option>
-        <option value="Crítico" ${item.resultado === 'Crítico' ? 'selected' : ''}>Crítico</option>
-      </select>`;
-      if(item.itemId && item.subTipoColeta === 'oleo'){
+      if(!usaMultiOleo){
+        resultadoCbmHtml = `<select class="sel-resultado-cbm" style="flex:0 0 150px;">
+          <option value="Normal" ${item.resultado !== 'Alerta' && item.resultado !== 'Crítico' ? 'selected' : ''}>Normal</option>
+          <option value="Alerta" ${item.resultado === 'Alerta' ? 'selected' : ''}>Alerta</option>
+          <option value="Crítico" ${item.resultado === 'Crítico' ? 'selected' : ''}>Crítico</option>
+        </select>`;
+      }
+      if(!usaMultiOleo && item.itemId && item.subTipoColeta === 'oleo'){
         const chavePrazo = chavePrazoColeta(item.itemId, item.subItens && item.subItens[0], item.subTipoColeta);
         const prazoExistente = prazosColeta[chavePrazo];
         if(prazoExistente && !item.editandoPrazo){
@@ -1778,6 +1878,7 @@ function renderManutencaoDraft(){
         <option value="CBM" ${item.tipo==='CBM'?'selected':''}>CBM</option>
       </select>
       ${subTipoColetaHtml}
+      ${oleoMultiHtml}
       ${equipHtml}
       ${campoDetalheHtml}
       ${statusEquipHtml}
@@ -1786,11 +1887,11 @@ function renderManutencaoDraft(){
       ${tipoOleoHtml}
       ${corrigidoHtml}
       ${idFluigHtml}
-      ${horimetroHtml}
+      ${usaMultiOleo ? '' : horimetroHtml}
       <button class="remove-btn" type="button">×</button>`;
 
     row.querySelector('.sel-tipo').addEventListener('change', e => { item.tipo = e.target.value; renderManutencaoDraft(); });
-    if(!ehServicoGeral){
+    if(!ehServicoGeral && !usaMultiOleo){
       row.querySelector('.sel-equip-categoria').addEventListener('change', e => {
         item.categoriaEquip = e.target.value;
         item.itemId = '';
@@ -1805,6 +1906,77 @@ function renderManutencaoDraft(){
           renderManutencaoDraft();
         });
       }
+    }
+    if(usaMultiOleo){
+      const selOleoCategoria = row.querySelector('.sel-oleo-categoria');
+      if(selOleoCategoria) selOleoCategoria.addEventListener('change', e => { item.categoriaEquip = e.target.value; renderManutencaoDraft(); });
+      const oleoGrid = row.querySelector('.oleo-equip-grid');
+      if(oleoGrid){
+        oleoGrid.addEventListener('click', e => {
+          const btn = e.target.closest('[data-equip-id]');
+          if(!btn) return;
+          const id = btn.dataset.equipId;
+          const idx = item.oleoEquips.indexOf(id);
+          if(idx >= 0) item.oleoEquips.splice(idx, 1); else item.oleoEquips.push(id);
+          renderManutencaoDraft();
+        });
+      }
+      row.querySelectorAll('.chk-oleo-subitem').forEach(chk => {
+        chk.addEventListener('change', e => {
+          const equipId = chk.dataset.equipId;
+          if(!item.oleoSubItens[equipId]) item.oleoSubItens[equipId] = [];
+          const arr = item.oleoSubItens[equipId];
+          const idx = arr.indexOf(chk.value);
+          if(e.target.checked && idx < 0) arr.push(chk.value);
+          else if(!e.target.checked && idx >= 0) arr.splice(idx, 1);
+          renderManutencaoDraft();
+        });
+      });
+      row.querySelectorAll('.btn-oleo-resultado').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chave = btn.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].resultado = btn.dataset.resultado;
+          renderManutencaoDraft();
+        });
+      });
+      row.querySelectorAll('.inp-oleo-descricao').forEach(inp => {
+        inp.addEventListener('input', e => {
+          const chave = inp.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].descricao = e.target.value;
+        });
+      });
+      row.querySelectorAll('.inp-oleo-prazo').forEach(inp => {
+        inp.addEventListener('input', e => {
+          const chave = inp.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].prazoInput = e.target.value;
+        });
+      });
+      row.querySelectorAll('.link-oleo-alterar-prazo').forEach(link => {
+        link.addEventListener('click', () => {
+          const chave = link.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].editandoPrazo = true;
+          renderManutencaoDraft();
+        });
+      });
+      row.querySelectorAll('.inp-oleo-tipo').forEach(inp => {
+        inp.addEventListener('input', e => {
+          const chave = inp.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].tipoOleoInput = e.target.value;
+        });
+      });
+      row.querySelectorAll('.link-oleo-alterar-tipo').forEach(link => {
+        link.addEventListener('click', () => {
+          const chave = link.dataset.chave;
+          if(!item.oleoResultados[chave]) item.oleoResultados[chave] = {resultado:'Normal', descricao:''};
+          item.oleoResultados[chave].editandoOleo = true;
+          renderManutencaoDraft();
+        });
+      });
     }
     if(ehServicoGeral){
       row.querySelector('.sel-categoria').addEventListener('change', e => item.categoria = e.target.value);
@@ -1870,7 +2042,9 @@ function renderManutencaoDraft(){
       atualizarHintPeca();
     }
     if(usaCBM){
-      row.querySelector('.sel-resultado-cbm').addEventListener('change', e => { item.resultado = e.target.value; renderManutencaoDraft(); });
+      if(!usaMultiOleo){
+        row.querySelector('.sel-resultado-cbm').addEventListener('change', e => { item.resultado = e.target.value; renderManutencaoDraft(); });
+      }
       row.querySelectorAll('.btn-subtipo-coleta').forEach(btn => {
         btn.addEventListener('click', () => {
           if(item.subTipoColeta === btn.dataset.subtipo) return;
@@ -1891,7 +2065,7 @@ function renderManutencaoDraft(){
       const linkAlterarOleo = row.querySelector('.link-alterar-oleo');
       if(linkAlterarOleo) linkAlterarOleo.addEventListener('click', () => { item.editandoTipoOleo = true; renderManutencaoDraft(); });
     }
-    if(!ehServicoGeral){
+    if(!ehServicoGeral && !usaMultiOleo){
       row.querySelector('.inp-horimetro').addEventListener('input', e => item.horimetro = e.target.value);
     }
     row.querySelector('.remove-btn').addEventListener('click', async () => {
@@ -2529,7 +2703,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(!confirm(`Já existe um registro parecido hoje pra: ${lista}. Confirma salvar mesmo assim?`)) return;
   }
 
-  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false, prazoAtualizado = false, tipoOleoAtualizado = false;
+  let manutSalvas = 0, servicosSalvos = 0, subItemFaltando = false, prazoAtualizado = false, tipoOleoAtualizado = false, descricaoFaltando = false;
   manutencaoRascunho.forEach(item => {
     if(item.tipo === 'Serviço Geral'){
       const texto = item.descricao.trim();
@@ -2539,6 +2713,34 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       }
       servicosDiarios.push({id: item.editandoServicoId || uid(), data, tipo: item.categoria || 'Outros', texto, itemId: item.itemId || null});
       servicosSalvos++;
+      return;
+    }
+    if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo'){
+      (item.oleoEquips || []).forEach(equipId => {
+        const temSubitens = !!SUBITENS_POR_EQUIP[equipId];
+        const combos = temSubitens ? (item.oleoSubItens[equipId] || []).map(s => ({subItem: s, chave: `${equipId}|${s}`})) : [{subItem: null, chave: equipId}];
+        combos.forEach(({subItem, chave}) => {
+          const det = item.oleoResultados[chave] || {resultado:'Normal', descricao:''};
+          const precisaDescricao = det.resultado === 'Alerta' || det.resultado === 'Crítico';
+          const descricaoFinal = (det.descricao || '').trim() || (precisaDescricao ? '' : 'Amostra coletada');
+          if(precisaDescricao && !descricaoFinal){ descricaoFaltando = true; return; }
+          if(!manutencoesDiarias[equipId]) manutencoesDiarias[equipId] = [];
+          manutencoesDiarias[equipId].push({
+            id: uid(), data, descricao: descricaoFinal, subItem, horimetro: '', tipo: 'CBM',
+            corrigido: null, idFluig: '', statusEquip: null,
+            resultado: det.resultado, subTipoColeta: 'oleo'
+          });
+          manutSalvas++;
+          if(det.prazoInput){
+            const dias = parseInt(det.prazoInput, 10);
+            if(dias > 0){ prazosColeta[chavePrazoColeta(equipId, subItem, 'oleo')] = dias; prazoAtualizado = true; }
+          }
+          if(det.tipoOleoInput && det.tipoOleoInput.trim()){
+            tipoOleoEquip[chaveTipoOleo(equipId, subItem)] = det.tipoOleoInput.trim();
+            tipoOleoAtualizado = true;
+          }
+        });
+      });
       return;
     }
     if(!item.itemId) return;
@@ -2612,6 +2814,9 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
     if(subItemFaltando){
       status.textContent = 'Nada foi salvo: escolha pelo menos um item específico (ex: BB, BE, 1, 2) antes de salvar.';
       showToast('Selecione um item específico antes de salvar');
+    }else if(descricaoFaltando){
+      status.textContent = 'Nada foi salvo: descreva o que foi encontrado nos equipamentos com Alerta ou Crítico.';
+      showToast('Preencha a descrição nos equipamentos com Alerta/Crítico');
     }else{
       status.textContent = 'Nenhum item preenchido.';
     }
@@ -2636,8 +2841,11 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   const partes = [];
   if(manutSalvas) partes.push(`${manutSalvas} manutenção(ões)`);
   if(servicosSalvos) partes.push(`${servicosSalvos} serviço(s) geral(is)`);
-  status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.` + (subItemFaltando ? ' Atenção: um item não foi salvo por falta de seleção específica (BB, BE, 1, 2...).' : '');
-  showToast(subItemFaltando ? 'Salvo, mas um item foi ignorado (faltou selecionar BB/BE/etc)' : 'Registro salvo');
+  const avisos = [];
+  if(subItemFaltando) avisos.push('um item não foi salvo por falta de seleção específica (BB, BE, 1, 2...)');
+  if(descricaoFaltando) avisos.push('um ou mais itens com Alerta/Crítico não foram salvos por falta de descrição');
+  status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.` + (avisos.length ? ' Atenção: ' + avisos.join('; ') + '.' : '');
+  showToast(avisos.length ? 'Salvo, mas alguns itens foram ignorados — veja o aviso' : 'Registro salvo');
 });
 
 document.getElementById('h-diario-data').valueAsDate = new Date();
