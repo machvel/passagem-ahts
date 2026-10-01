@@ -217,6 +217,8 @@
   .preview-actions .btn-ir-imprimir{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);}
   #preview-content{padding:24px;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-date-fns/3.0.0/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
 
@@ -228,6 +230,7 @@
 <div id="alerta-vencimentos" style="display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;padding:10px 14px;margin:0 16px 12px;cursor:pointer;font-size:12.5px;color:#fff;"></div>
 
 <div class="tabs">
+  <div class="tab" data-tab="dashboard">Dashboard</div>
   <div class="tab active" data-tab="diario">Diário</div>
   <div class="tab" data-tab="pendencias" id="tab-btn-pendencias">Pendências</div>
   <div class="tab" data-tab="novo">P. Serviço</div>
@@ -240,6 +243,27 @@
     <div class="section-title" style="margin-bottom:8px;">Pendências em aberto</div>
     <p class="empty-hint" style="padding:0 0 8px;">Manutenções corretivas ainda não resolvidas. Quando corrigir, clique em "Marcar como corrigido".</p>
     <div id="lista-pendencias-diario"></div>
+  </div>
+</div>
+
+<div id="tab-dashboard" style="display:none;">
+  <div class="panel">
+    <div class="section-title" style="margin-bottom:10px;">Dashboard</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--text-faint);">Período:</span>
+      <input type="date" id="h-dash-inicio" style="flex:0 0 145px;">
+      <span style="font-size:11px;color:var(--text-faint);">até</span>
+      <input type="date" id="h-dash-fim" style="flex:0 0 145px;">
+      <button class="add-btn" id="btn-dash-atualizar" type="button" style="padding:8px 14px;">Atualizar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;margin-bottom:14px;">
+      <div class="dash-subtab active" data-dash="geral" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:9px 6px;text-align:center;color:var(--accent);font-size:10.5px;font-weight:600;cursor:pointer;">⚠ Visão geral</div>
+      <div class="dash-subtab" data-dash="equipamento" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">🔧 Por equipamento</div>
+      <div class="dash-subtab" data-dash="peca" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">⚙ Por peça</div>
+      <div class="dash-subtab" data-dash="combustivel" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">⛽ Combustível</div>
+      <div class="dash-subtab" data-dash="lubrificante" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">🛢 Lubrificante</div>
+    </div>
+    <div id="dash-conteudo"></div>
   </div>
 </div>
 
@@ -2996,6 +3020,292 @@ function abrirFormResolucaoCbm(btn){
   wrapper.querySelector('.inp-resolucao-cbm').focus();
 }
 
+let dashSubtabAtual = 'geral';
+function getPeriodoDash(){
+  return { inicio: document.getElementById('h-dash-inicio').value, fim: document.getElementById('h-dash-fim').value };
+}
+function renderDashboard(){
+  const inp = document.getElementById('h-dash-inicio');
+  if(!inp.value){
+    const hoje = new Date();
+    const seiseMesesAtras = new Date(hoje);
+    seiseMesesAtras.setMonth(seiseMesesAtras.getMonth() - 6);
+    document.getElementById('h-dash-inicio').valueAsDate = seiseMesesAtras;
+    document.getElementById('h-dash-fim').valueAsDate = hoje;
+  }
+  renderDashSubtab(dashSubtabAtual);
+}
+function renderDashSubtab(tipo){
+  dashSubtabAtual = tipo;
+  document.querySelectorAll('.dash-subtab').forEach(el => {
+    const ativo = el.dataset.dash === tipo;
+    el.style.background = ativo ? 'var(--accent-dim)' : 'var(--panel-2)';
+    el.style.borderColor = ativo ? 'var(--accent)' : 'var(--border)';
+    el.style.color = ativo ? 'var(--accent)' : 'var(--text-dim)';
+    el.style.fontWeight = ativo ? '600' : '400';
+  });
+  if(tipo === 'geral') renderDashGeral();
+  else if(tipo === 'equipamento') renderDashRanking('equipamento');
+  else if(tipo === 'peca') renderDashRanking('peca');
+  else if(tipo === 'combustivel') renderDashConsumo(leiturasFuel, 'm³', 'Combustível');
+  else if(tipo === 'lubrificante') renderDashConsumo(leiturasOleo, 'L', 'Lubrificante');
+}
+function renderDashGeral(){
+  const c = document.getElementById('dash-conteudo');
+  let naoOperacional = 0;
+  const comPendencia = new Set();
+  const pendenciasAbertas = [];
+  ALL_EQUIP_ITEMS.forEach(eq => {
+    (manutencoesDiarias[eq.id]||[]).forEach(m => {
+      if(manutencaoEhPendente(m)){
+        comPendencia.add(eq.id);
+        pendenciasAbertas.push({equipId: eq.id, nome: eq.nome, m});
+        if(m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional' && m.corrigido === false) naoOperacional++;
+      }
+    });
+  });
+  pendenciasAbertas.sort((a,b) => b.m.data.localeCompare(a.m.data));
+  const equipOk = ALL_EQUIP_ITEMS.length - comPendencia.size;
+
+  const vencimentos = [];
+  MOTORES_ITEMS.forEach(it => {
+    it.horas.forEach(tipo => {
+      const calc = horasRestantesManutencao(it.id, tipo);
+      if(calc && calc.restante < calc.intervalo * 0.3){
+        vencimentos.push({
+          texto: `⏱ ${it.nome} — ${tipoComApelido(tipo)}`,
+          restante: calc.restante,
+          txt: calc.restante < 0 ? `vencida há ${Math.abs(Math.round(calc.restante))}h` : `faltam ${Math.round(calc.restante)}h`
+        });
+      }
+    });
+  });
+  const gruposAmostra = {};
+  ALL_EQUIP_ITEMS.forEach(eq => {
+    (manutencoesDiarias[eq.id] || []).filter(m => m.tipo === 'CBM').forEach(m => {
+      const subTipo = m.subTipoColeta || 'oleo';
+      const chave = chavePrazoColeta(eq.id, m.subItem, subTipo);
+      if(!gruposAmostra[chave] || m.data > gruposAmostra[chave].data){
+        gruposAmostra[chave] = { equipId: eq.id, equipNome: eq.nome, subItem: m.subItem, subTipo, data: m.data };
+      }
+    });
+  });
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  Object.values(gruposAmostra).forEach(g => {
+    const chavePrazo = chavePrazoColeta(g.equipId, g.subItem, g.subTipo);
+    const prazo = prazosColeta[chavePrazo];
+    if(!prazo) return;
+    const dataProxima = new Date(g.data+'T00:00:00');
+    dataProxima.setDate(dataProxima.getDate() + prazo);
+    const diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
+    if(diasRestantes >= prazo * 0.3) return;
+    const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
+    const nomeExib = g.subItem ? `${g.equipNome}: ${g.subItem}` : g.equipNome;
+    vencimentos.push({
+      texto: `${icone} ${nomeExib}`,
+      restante: diasRestantes,
+      txt: diasRestantes < 0 ? `vencida há ${Math.abs(diasRestantes)} dias` : `faltam ${diasRestantes} dias`
+    });
+  });
+  vencimentos.sort((a,b) => a.restante - b.restante);
+  const vencimentosMostrar = vencimentos.slice(0, 8);
+
+  c.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+      <div style="background:var(--red-dim);border:1px solid var(--red);border-radius:8px;padding:12px;text-align:center;">
+        <div style="color:var(--red);font-size:22px;font-weight:800;">${naoOperacional}</div>
+        <div style="color:var(--red);font-size:9px;opacity:0.9;">Não operacional</div>
+      </div>
+      <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:8px;padding:12px;text-align:center;">
+        <div style="color:var(--amber);font-size:22px;font-weight:800;">${pendenciasAbertas.length}</div>
+        <div style="color:var(--amber);font-size:9px;opacity:0.9;">Pendências</div>
+      </div>
+      <div style="background:#0f2e1c;border:1px solid #2ecc71;border-radius:8px;padding:12px;text-align:center;">
+        <div style="color:#2ecc71;font-size:22px;font-weight:800;">${equipOk}</div>
+        <div style="color:#2ecc71;font-size:9px;opacity:0.9;">Equipamentos OK</div>
+      </div>
+    </div>
+    ${vencimentosMostrar.length ? `
+      <div style="color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Próximos vencimentos</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+        ${vencimentosMostrar.map(v => `<div style="background:var(--panel-2);border-left:3px solid ${v.restante < 0 ? 'var(--red)' : 'var(--amber)'};border-radius:0 6px 6px 0;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+          <span style="font-size:11px;">${esc(v.texto)}</span>
+          <span style="color:${v.restante < 0 ? 'var(--red)' : 'var(--amber)'};font-size:10px;font-weight:600;">${esc(v.txt)}</span>
+        </div>`).join('')}
+      </div>
+    ` : ''}
+    <div style="color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Pendências em aberto</div>
+    ${pendenciasAbertas.length === 0 ? '<p class="empty-hint">Nenhuma pendência em aberto.</p>' : `
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${pendenciasAbertas.slice(0, 10).map(it => `<div style="background:var(--panel-2);border-radius:6px;padding:8px 10px;">
+          <div style="font-size:11px;font-weight:600;">${esc(it.nome)}</div>
+          <div style="font-size:10.5px;color:var(--text-dim);">${esc(descricaoManut(it.m))}</div>
+          <div style="font-size:9.5px;color:var(--text-faint);">${fmtDate(it.m.data)}</div>
+        </div>`).join('')}
+      </div>
+    `}
+  `;
+}
+function renderDashRanking(modo){
+  const c = document.getElementById('dash-conteudo');
+  const { inicio, fim } = getPeriodoDash();
+  const contagem = {};
+  if(modo === 'equipamento'){
+    ALL_EQUIP_ITEMS.forEach(eq => {
+      let count = 0;
+      (manutencoesDiarias[eq.id] || []).forEach(m => {
+        if(inicio && fim && (m.data < inicio || m.data > fim)) return;
+        if(m.tipo === 'Corretiva') count++;
+        if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico')) count++;
+      });
+      if(count > 0) contagem[eq.id] = { nome: eq.nome, count };
+    });
+  }else{
+    ALL_EQUIP_ITEMS.forEach(eq => {
+      (manutencoesDiarias[eq.id] || []).forEach(m => {
+        if(inicio && fim && (m.data < inicio || m.data > fim)) return;
+        if(m.tipo !== 'Corretiva' || !m.idFluig) return;
+        m.idFluig.split(',').map(s => s.trim()).filter(Boolean).forEach(id => {
+          const nome = pecasFluigMap[id.toUpperCase()] || id;
+          if(!contagem[nome]) contagem[nome] = { nome, count: 0 };
+          contagem[nome].count++;
+        });
+      });
+    });
+  }
+  const lista = Object.values(contagem).sort((a,b) => b.count - a.count).slice(0, 10);
+  const titulo = modo === 'equipamento' ? '🔧 Por equipamento — Corretivas + CBM Alerta/Crítico' : '⚙ Por peça — vezes registrada (ID Fluig)';
+  if(lista.length === 0){
+    c.innerHTML = `<div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:12px;">${titulo}</div><p class="empty-hint">Nenhuma ocorrência no período escolhido.</p>`;
+    return;
+  }
+  c.innerHTML = `
+    <div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:14px;">${titulo}</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${lista.map((it, i) => {
+        const pos = i + 1;
+        const corFundo = pos === 1 ? 'var(--red)' : pos <= 3 ? 'var(--amber)' : 'var(--panel-2)';
+        const corTexto = pos === 1 ? '#fff' : pos <= 3 ? '#1a1a1a' : 'var(--text)';
+        return `<div style="display:flex;align-items:center;gap:12px;">
+          <div style="color:var(--text-faint);font-size:14px;font-weight:800;width:24px;">${pos}º</div>
+          <div style="flex:1;color:var(--text);font-size:12px;">${esc(it.nome)}</div>
+          <div style="background:${corFundo};color:${corTexto};font-size:12px;font-weight:800;padding:4px 12px;border-radius:14px;min-width:28px;text-align:center;">${it.count}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+function calcularSeriesTaxa(leituraSet, itemId, inicio, fim){
+  const leiturasItem = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim));
+  const horasItem = leituras[itemId] || [];
+  const mapaHoras = {};
+  horasItem.forEach(h => { mapaHoras[h.data] = parseFloat(h.valor); });
+  const pontos = leiturasItem
+    .filter(l => mapaHoras[l.data] !== undefined && !isNaN(parseFloat(l.valor)) && !isNaN(mapaHoras[l.data]))
+    .map(l => ({ data: l.data, leitura: parseFloat(l.valor), horas: mapaHoras[l.data] }))
+    .sort((a,b) => a.data.localeCompare(b.data));
+  const serie = [];
+  for(let i = 1; i < pontos.length; i++){
+    const deltaL = pontos[i].leitura - pontos[i-1].leitura;
+    const deltaH = pontos[i].horas - pontos[i-1].horas;
+    if(deltaH > 0 && deltaL >= 0) serie.push({ data: pontos[i].data, taxa: deltaL / deltaH });
+  }
+  return serie;
+}
+function calcularPontoHorimetro(leituraSet, itemId, inicio, fim){
+  const arr = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim)).sort((a,b) => a.data.localeCompare(b.data));
+  const horasArr = (leituras[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim)).sort((a,b) => a.data.localeCompare(b.data));
+  if(arr.length < 2 || horasArr.length < 2) return null;
+  const deltaLeitura = parseFloat(arr[arr.length-1].valor) - parseFloat(arr[0].valor);
+  const horaInicio = parseFloat(horasArr[0].valor);
+  const horaFim = parseFloat(horasArr[horasArr.length-1].valor);
+  if(isNaN(deltaLeitura) || isNaN(horaInicio) || isNaN(horaFim) || horaFim <= horaInicio || deltaLeitura < 0) return null;
+  return { horaInicio, horaFim, deltaLeitura };
+}
+const CORES_SERIE = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
+let dashChartTempo = null, dashChartHorimetro = null;
+let dashGrupoConsumo = 'principais';
+function renderDashConsumo(leituraSet, unidade, titulo){
+  const c = document.getElementById('dash-conteudo');
+  const { inicio, fim } = getPeriodoDash();
+  const icone = titulo === 'Combustível' ? '⛽' : '🛢';
+  const itens = MOTORES_ITEMS.filter(it => dashGrupoConsumo === 'principais' ? it.id.startsWith('me') : it.id.startsWith('dg'));
+
+  c.innerHTML = `
+    <div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:10px;">${icone} ${esc(titulo)} — consumo por motor (${unidade}/h)</div>
+    <div style="display:flex;gap:6px;margin-bottom:14px;">
+      <div class="dash-grupo-btn" data-grupo="principais" style="background:${dashGrupoConsumo==='principais'?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${dashGrupoConsumo==='principais'?'var(--accent)':'var(--border)'};border-radius:6px;padding:7px 12px;font-size:10.5px;color:${dashGrupoConsumo==='principais'?'var(--accent)':'var(--text-dim)'};cursor:pointer;">Motores principais</div>
+      <div class="dash-grupo-btn" data-grupo="geradores" style="background:${dashGrupoConsumo==='geradores'?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${dashGrupoConsumo==='geradores'?'var(--accent)':'var(--border)'};border-radius:6px;padding:7px 12px;font-size:10.5px;color:${dashGrupoConsumo==='geradores'?'var(--accent)':'var(--text-dim)'};cursor:pointer;">Diesel geradores</div>
+    </div>
+    <div style="color:var(--text);font-size:11px;font-weight:600;margin-bottom:6px;">Taxa de consumo ao longo do tempo</div>
+    <p id="dash-aviso-offline" class="empty-hint" style="display:none;margin:0 0 6px;">Gráfico indisponível no momento (sem conexão com a internet). Os valores continuam abaixo.</p>
+    <div style="position:relative;width:100%;height:220px;margin-bottom:8px;">
+      <canvas id="dash-chart-tempo" role="img" aria-label="Taxa de consumo ao longo do tempo"></canvas>
+    </div>
+    <div id="dash-legenda-tempo" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;font-size:10.5px;color:var(--text-faint);"></div>
+
+    <div style="color:var(--text);font-size:11px;font-weight:600;margin-bottom:6px;">Consumo acumulado por horímetro</div>
+    <div style="position:relative;width:100%;height:220px;margin-bottom:8px;">
+      <canvas id="dash-chart-horimetro" role="img" aria-label="Consumo acumulado por horímetro"></canvas>
+    </div>
+    <div id="dash-legenda-horimetro" style="display:flex;flex-wrap:wrap;gap:10px;color:var(--text-faint);font-size:10.5px;"></div>
+  `;
+
+  document.querySelectorAll('.dash-grupo-btn').forEach(btn => {
+    btn.addEventListener('click', () => { dashGrupoConsumo = btn.dataset.grupo; renderDashConsumo(leituraSet, unidade, titulo); });
+  });
+
+  if(dashChartTempo){ dashChartTempo.destroy(); dashChartTempo = null; }
+  if(dashChartHorimetro){ dashChartHorimetro.destroy(); dashChartHorimetro = null; }
+
+  const seriesTempo = itens.map((it, i) => ({ nome: it.nome, cor: CORES_SERIE[i % CORES_SERIE.length], serie: calcularSeriesTaxa(leituraSet, it.id, inicio, fim) }));
+  const legendaTempoHtml = seriesTempo.map(s => `<span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:${s.cor};"></span>${esc(s.nome)}</span>`).join('');
+  document.getElementById('dash-legenda-tempo').innerHTML = legendaTempoHtml;
+
+  const pontosHorimetro = itens.map((it, i) => ({ nome: it.nome, cor: CORES_SERIE[i % CORES_SERIE.length], ponto: calcularPontoHorimetro(leituraSet, it.id, inicio, fim) }));
+  const legendaHorimetroHtml = pontosHorimetro.filter(p => p.ponto).map(p => `<span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:${p.cor};"></span>${esc(p.nome)} — ${(p.ponto.deltaLeitura/(p.ponto.horaFim-p.ponto.horaInicio)).toFixed(3)} ${unidade}/h</span>`).join('');
+  document.getElementById('dash-legenda-horimetro').innerHTML = legendaHorimetroHtml || '<span>Sem dados suficientes no período.</span>';
+
+  if(typeof Chart === 'undefined'){
+    document.getElementById('dash-aviso-offline').style.display = 'block';
+    return;
+  }
+
+  dashChartTempo = new Chart(document.getElementById('dash-chart-tempo'), {
+    type: 'line',
+    data: {
+      datasets: seriesTempo.filter(s => s.serie.length > 0).map(s => ({
+        label: s.nome, borderColor: s.cor, backgroundColor: s.cor, borderWidth: 2, pointRadius: 3, tension: 0.2,
+        data: s.serie.map(p => ({ x: p.data, y: Math.round(p.taxa * 1000) / 1000 }))
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { type: 'time', time: { unit: 'month' } }, y: { title: { display: true, text: unidade+'/h' } } }
+    }
+  });
+
+  dashChartHorimetro = new Chart(document.getElementById('dash-chart-horimetro'), {
+    type: 'line',
+    data: {
+      datasets: pontosHorimetro.filter(p => p.ponto).map(p => ({
+        label: p.nome, borderColor: p.cor, backgroundColor: p.cor, borderWidth: 2, pointRadius: 4,
+        data: [{x: p.ponto.horaInicio, y: 0}, {x: p.ponto.horaFim, y: Math.round(p.ponto.deltaLeitura*100)/100}]
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { type: 'linear', title: { display: true, text: 'Horas rodadas no período' } }, y: { title: { display: true, text: unidade } } }
+    }
+  });
+}
+document.querySelectorAll('.dash-subtab').forEach(el => {
+  el.addEventListener('click', () => renderDashSubtab(el.dataset.dash));
+});
+document.getElementById('btn-dash-atualizar').addEventListener('click', () => renderDashSubtab(dashSubtabAtual));
+
 function renderPendenciasDiarioTab(){
   const c = document.getElementById('lista-pendencias-diario');
   const itens = [];
@@ -3182,9 +3492,11 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-pendencias').style.display = tab.dataset.tab === 'pendencias' ? 'block' : 'none';
     document.getElementById('tab-historico').style.display = tab.dataset.tab === 'historico' ? 'block' : 'none';
     document.getElementById('tab-ferramentas').style.display = tab.dataset.tab === 'ferramentas' ? 'block' : 'none';
+    document.getElementById('tab-dashboard').style.display = tab.dataset.tab === 'dashboard' ? 'block' : 'none';
     if(tab.dataset.tab === 'historico') renderHistorico();
     if(tab.dataset.tab === 'diario'){ renderDiario(); renderEstatisticas(); renderProximasManutencoes(); carregarPecasFluig(); }
     if(tab.dataset.tab === 'pendencias') renderPendenciasDiarioTab();
+    if(tab.dataset.tab === 'dashboard') renderDashboard();
   });
 });
 document.getElementById('h-busca-historico').addEventListener('input', () => renderHistorico());
