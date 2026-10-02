@@ -234,20 +234,11 @@
 <div id="alerta-vencimentos" style="display:none;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;padding:10px 14px;margin:0 16px 12px;cursor:pointer;font-size:12.5px;color:#fff;"></div>
 
 <div class="tabs">
-  <div class="tab" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="dashboard" id="tab-btn-dashboard">Dashboard</div>
   <div class="tab active" data-tab="diario">Diário</div>
-  <div class="tab" data-tab="pendencias" id="tab-btn-pendencias">Pendências</div>
   <div class="tab" data-tab="novo">P. Serviço</div>
   <div class="tab" data-tab="historico">Histórico</div>
   <div class="tab" data-tab="ferramentas">Ferramentas</div>
-</div>
-
-<div id="tab-pendencias" style="display:none;">
-  <div class="panel">
-    <div class="section-title" style="margin-bottom:8px;">Pendências em aberto</div>
-    <p class="empty-hint" style="padding:0 0 8px;">Manutenções corretivas ainda não resolvidas. Quando corrigir, clique em "Marcar como corrigido".</p>
-    <div id="lista-pendencias-diario"></div>
-  </div>
 </div>
 
 <div id="tab-dashboard" style="display:none;">
@@ -262,6 +253,7 @@
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;margin-bottom:14px;">
       <div class="dash-subtab active" data-dash="geral" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:9px 6px;text-align:center;color:var(--accent);font-size:10.5px;font-weight:600;cursor:pointer;">⚠ Visão geral</div>
+      <div class="dash-subtab" data-dash="cbm" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">🧪 CBM</div>
       <div class="dash-subtab" data-dash="equipamento" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">🔧 Por equipamento</div>
       <div class="dash-subtab" data-dash="peca" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">⚙ Por peça</div>
       <div class="dash-subtab" data-dash="combustivel" style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center;color:var(--text-dim);font-size:10.5px;cursor:pointer;">⛽ Combustível</div>
@@ -308,8 +300,6 @@
   <div class="panel" style="margin-top:12px;">
     <div class="section-title" style="margin-bottom:8px;">Estatísticas de uso</div>
     <div id="lista-estatisticas"></div>
-    <div id="lista-estatisticas-fuel" style="margin-top:10px;"></div>
-    <div id="lista-estatisticas-oleo" style="margin-top:10px;"></div>
   </div>
 
   <div class="panel" style="margin-top:12px;border-color:var(--accent);">
@@ -415,7 +405,7 @@
       <div class="field"><label>Até</label><input type="date" id="h-consulta-fim"></div>
     </div>
     <button class="save-btn secondary" id="btn-consultar-diario" type="button" style="margin-top:8px;">Buscar</button>
-    <button class="add-btn" id="btn-status-amostras" type="button" style="margin-top:8px;">📊 Status das amostras</button>
+    <p class="empty-hint" style="margin:6px 0 0;">📊 O status das amostras (óleo/vibração) agora fica na aba <b>Dashboard → CBM</b>.</p>
     <div id="resultado-consulta" style="margin-top:12px;"></div>
   </div>
 
@@ -2714,9 +2704,6 @@ function renderEstatisticas(){
     c.appendChild(cell);
   });
   if(!c.innerHTML) c.innerHTML = '<p class="empty-hint">Registre pelo menos 2 dias de leitura de um mesmo equipamento para ver estatísticas aqui.</p>';
-
-  renderEstatisticasConsumo('lista-estatisticas-fuel', MOTORES_ITEMS, leiturasFuel, 'm³', 'fuel', 1);
-  renderEstatisticasConsumo('lista-estatisticas-oleo', MOTORES_ITEMS, leiturasOleo, 'L', 'óleo', 0);
 }
 
 document.getElementById('btn-salvar-diario').addEventListener('click', async () => {
@@ -3049,8 +3036,8 @@ function corResultadoAmostra(resultado){
   if(resultado === 'Crítico') return { bg: '#e0392b', fg: '#fff' };
   return { bg: '#2ecc71', fg: '#fff' };
 }
-function renderStatusAmostras(){
-  const resultEl = document.getElementById('resultado-consulta');
+function renderStatusAmostras(idDestino){
+  const resultEl = document.getElementById(idDestino || 'resultado-consulta');
   const grupos = {};
   ALL_EQUIP_ITEMS.forEach(eq => {
     (manutencoesDiarias[eq.id] || []).filter(m => m.tipo === 'CBM').forEach(m => {
@@ -3091,8 +3078,6 @@ function renderStatusAmostras(){
   }
   resultEl.innerHTML = `<div class="busca-resultado-wrap">${linhas.join('')}</div>`;
 }
-document.getElementById('btn-status-amostras').addEventListener('click', renderStatusAmostras);
-
 document.getElementById('btn-consultar-diario').addEventListener('click', () => {
   const nomeBusca = document.getElementById('h-consulta-equip').value.trim();
   const palavraBusca = document.getElementById('h-consulta-palavra').value.trim().toLowerCase();
@@ -3283,27 +3268,23 @@ function renderDashSubtab(tipo){
     el.style.fontWeight = ativo ? '600' : '400';
   });
   if(tipo === 'geral') renderDashGeral();
+  else if(tipo === 'cbm') renderStatusAmostras('dash-conteudo');
   else if(tipo === 'equipamento') renderDashRanking('equipamento');
   else if(tipo === 'peca') renderDashRanking('peca');
   else if(tipo === 'combustivel') renderDashConsumo(leiturasFuel, 'm³', 'Combustível');
   else if(tipo === 'lubrificante') renderDashConsumo(leiturasOleo, 'L', 'Lubrificante');
 }
+let dashGeralFiltro = 'pendencias';
 function renderDashGeral(){
   const c = document.getElementById('dash-conteudo');
-  let naoOperacional = 0;
   const comPendencia = new Set();
-  const pendenciasAbertas = [];
-  ALL_EQUIP_ITEMS.forEach(eq => {
-    (manutencoesDiarias[eq.id]||[]).forEach(m => {
-      if(manutencaoEhPendente(m)){
-        comPendencia.add(eq.id);
-        pendenciasAbertas.push({equipId: eq.id, nome: eq.nome, m});
-        if(m.tipo === 'Corretiva' && m.statusEquip === 'nao_operacional' && m.corrigido === false) naoOperacional++;
-      }
-    });
+  const naoOperacionalItens = [];
+  const pendenciasAbertas = getItensPendentes();
+  pendenciasAbertas.forEach(it => {
+    comPendencia.add(it.equipId);
+    if(it.m.tipo === 'Corretiva' && it.m.statusEquip === 'nao_operacional' && it.m.corrigido === false) naoOperacionalItens.push(it);
   });
-  pendenciasAbertas.sort((a,b) => b.m.data.localeCompare(a.m.data));
-  const equipOk = ALL_EQUIP_ITEMS.length - comPendencia.size;
+  const equipOkItens = ALL_EQUIP_ITEMS.filter(eq => !comPendencia.has(eq.id));
 
   const vencimentos = [];
   MOTORES_ITEMS.forEach(it => {
@@ -3318,53 +3299,41 @@ function renderDashGeral(){
       }
     });
   });
-  const gruposAmostra = {};
-  ALL_EQUIP_ITEMS.forEach(eq => {
-    (manutencoesDiarias[eq.id] || []).filter(m => m.tipo === 'CBM').forEach(m => {
-      const subTipo = m.subTipoColeta || 'oleo';
-      const chave = chavePrazoColeta(eq.id, m.subItem, subTipo);
-      if(!gruposAmostra[chave] || m.data > gruposAmostra[chave].data){
-        gruposAmostra[chave] = { equipId: eq.id, equipNome: eq.nome, subItem: m.subItem, subTipo, data: m.data };
-      }
-    });
-  });
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
-  Object.values(gruposAmostra).forEach(g => {
-    const chavePrazo = chavePrazoColeta(g.equipId, g.subItem, g.subTipo);
-    const prazo = prazosColeta[chavePrazo];
-    if(!prazo) return;
-    const dataProxima = new Date(g.data+'T00:00:00');
-    dataProxima.setDate(dataProxima.getDate() + prazo);
-    const diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
-    if(diasRestantes >= prazo * 0.3) return;
-    const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
-    const nomeExib = g.subItem ? `${g.equipNome}: ${g.subItem}` : g.equipNome;
-    vencimentos.push({
-      texto: `${icone} ${nomeExib}`,
-      restante: diasRestantes,
-      txt: diasRestantes < 0 ? `vencida há ${Math.abs(diasRestantes)} dias` : `faltam ${diasRestantes} dias`
-    });
-  });
   vencimentos.sort((a,b) => a.restante - b.restante);
   const vencimentosMostrar = vencimentos.slice(0, 8);
 
+  const cardStyle = (ativo, corBg, corBorda) => `background:${corBg};border:${ativo ? '2px' : '1px'} solid ${corBorda};border-radius:8px;padding:12px;text-align:center;cursor:pointer;opacity:${dashGeralFiltro && !ativo ? '0.55' : '1'};`;
+
+  let detalheHtml = '';
+  if(dashGeralFiltro === 'naooperacional'){
+    detalheHtml = naoOperacionalItens.length === 0 ? '<p class="empty-hint">Nenhum equipamento não operacional no momento.</p>' :
+      `<div style="display:flex;flex-direction:column;gap:8px;">${naoOperacionalItens.map(it => renderItemPendenteHtml(it)).join('')}</div>`;
+  }else if(dashGeralFiltro === 'pendencias'){
+    detalheHtml = pendenciasAbertas.length === 0 ? '<p class="empty-hint">Nenhuma pendência em aberto.</p>' :
+      `<div style="display:flex;flex-direction:column;gap:8px;">${pendenciasAbertas.map(it => renderItemPendenteHtml(it)).join('')}</div>`;
+  }else if(dashGeralFiltro === 'ok'){
+    detalheHtml = equipOkItens.length === 0 ? '<p class="empty-hint">Nenhum equipamento sem pendência no momento.</p>' :
+      `<div style="display:flex;flex-wrap:wrap;gap:6px;">${equipOkItens.map(eq => `<div style="background:var(--panel-2);border-radius:14px;padding:5px 12px;font-size:11px;color:var(--text);">${esc(eq.nome)}</div>`).join('')}</div>`;
+  }
+  const tituloDetalhe = dashGeralFiltro === 'naooperacional' ? 'Equipamentos não operacionais' : dashGeralFiltro === 'pendencias' ? 'Pendências em aberto' : dashGeralFiltro === 'ok' ? 'Equipamentos OK' : '';
+
   c.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
-      <div style="background:var(--red-dim);border:1px solid var(--red);border-radius:8px;padding:12px;text-align:center;">
-        <div style="color:var(--red);font-size:22px;font-weight:800;">${naoOperacional}</div>
+      <div class="dash-card-filtro" data-filtro="naooperacional" style="${cardStyle(dashGeralFiltro==='naooperacional', 'var(--red-dim)', 'var(--red)')}">
+        <div style="color:var(--red);font-size:22px;font-weight:800;">${naoOperacionalItens.length}</div>
         <div style="color:var(--red);font-size:9px;opacity:0.9;">Não operacional</div>
       </div>
-      <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:8px;padding:12px;text-align:center;">
+      <div class="dash-card-filtro" data-filtro="pendencias" style="${cardStyle(dashGeralFiltro==='pendencias', 'var(--amber-dim)', 'var(--amber)')}">
         <div style="color:var(--amber);font-size:22px;font-weight:800;">${pendenciasAbertas.length}</div>
         <div style="color:var(--amber);font-size:9px;opacity:0.9;">Pendências</div>
       </div>
-      <div style="background:#0f2e1c;border:1px solid #2ecc71;border-radius:8px;padding:12px;text-align:center;">
-        <div style="color:#2ecc71;font-size:22px;font-weight:800;">${equipOk}</div>
+      <div class="dash-card-filtro" data-filtro="ok" style="${cardStyle(dashGeralFiltro==='ok', '#0f2e1c', '#2ecc71')}">
+        <div style="color:#2ecc71;font-size:22px;font-weight:800;">${equipOkItens.length}</div>
         <div style="color:#2ecc71;font-size:9px;opacity:0.9;">Equipamentos OK</div>
       </div>
     </div>
     ${vencimentosMostrar.length ? `
-      <div style="color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Próximos vencimentos</div>
+      <div style="color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Próximos vencimentos (horímetro)</div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
         ${vencimentosMostrar.map(v => `<div style="background:var(--panel-2);border-left:3px solid ${v.restante < 0 ? 'var(--red)' : 'var(--amber)'};border-radius:0 6px 6px 0;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
           <span style="font-size:11px;">${esc(v.texto)}</span>
@@ -3372,17 +3341,15 @@ function renderDashGeral(){
         </div>`).join('')}
       </div>
     ` : ''}
-    <div style="color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Pendências em aberto</div>
-    ${pendenciasAbertas.length === 0 ? '<p class="empty-hint">Nenhuma pendência em aberto.</p>' : `
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        ${pendenciasAbertas.slice(0, 10).map(it => `<div style="background:var(--panel-2);border-radius:6px;padding:8px 10px;">
-          <div style="font-size:11px;font-weight:600;">${esc(it.nome)}</div>
-          <div style="font-size:10.5px;color:var(--text-dim);">${esc(descricaoManut(it.m))}</div>
-          <div style="font-size:9.5px;color:var(--text-faint);">${fmtDate(it.m.data)}</div>
-        </div>`).join('')}
-      </div>
-    `}
+    ${tituloDetalhe ? `<div style="color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">${esc(tituloDetalhe)}</div>${detalheHtml}` : ''}
   `;
+
+  document.querySelectorAll('.dash-card-filtro').forEach(card => {
+    card.addEventListener('click', () => {
+      dashGeralFiltro = dashGeralFiltro === card.dataset.filtro ? null : card.dataset.filtro;
+      renderDashGeral();
+    });
+  });
 }
 function renderDashRanking(modo){
   const c = document.getElementById('dash-conteudo');
@@ -3463,12 +3430,33 @@ function calcularPontoHorimetro(leituraSet, itemId, inicio, fim){
 const CORES_SERIE = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
 let dashChartTempo = null, dashChartHorimetro = null;
 let dashGrupoConsumo = 'principais';
+function calcularTotalEMedia(leituraSet, itemId, inicio, fim){
+  const arr = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim)).sort((a,b) => a.data.localeCompare(b.data));
+  if(arr.length < 2) return null;
+  const v1 = parseFloat((arr[0].valor+'').replace(',','.'));
+  const v2 = parseFloat((arr[arr.length-1].valor+'').replace(',','.'));
+  if(isNaN(v1) || isNaN(v2)) return null;
+  const total = v2 - v1;
+  const dias = Math.max(1, Math.round((new Date(arr[arr.length-1].data) - new Date(arr[0].data)) / 86400000));
+  return { total, media: total/dias };
+}
 function renderDashConsumo(leituraSet, unidade, titulo){
   const c = document.getElementById('dash-conteudo');
   const { inicio, fim } = getPeriodoDash();
   const icone = titulo === 'Combustível' ? '⛽' : '🛢';
   const grupoNome = dashGrupoConsumo === 'principais' ? 'Motores principais' : 'Diesel geradores';
   const itens = MOTORES_ITEMS.filter(it => dashGrupoConsumo === 'principais' ? it.id.startsWith('me') : it.id.startsWith('dg'));
+  const casasDecimais = titulo === 'Combustível' ? 1 : 0;
+
+  const totaisHtml = itens.map(it => {
+    const t = calcularTotalEMedia(leituraSet, it.id, inicio, fim);
+    if(!t) return '';
+    return `<div style="background:var(--panel-2);border-radius:8px;padding:9px 6px;text-align:center;">
+      <div style="color:var(--text);font-size:13px;font-weight:700;">${t.total.toFixed(casasDecimais)}${unidade}</div>
+      <div style="color:var(--text-faint);font-size:8px;">${esc(it.nome)} total</div>
+      <div style="color:var(--text-dim);font-size:8px;">méd. ${t.media.toFixed(casasDecimais+1)}/dia</div>
+    </div>`;
+  }).filter(Boolean).join('');
 
   c.innerHTML = `
     <div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:10px;">${icone} ${esc(titulo)} — consumo por motor (${unidade}/h)</div>
@@ -3476,6 +3464,7 @@ function renderDashConsumo(leituraSet, unidade, titulo){
       <div class="dash-grupo-btn" data-grupo="principais" style="background:${dashGrupoConsumo==='principais'?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${dashGrupoConsumo==='principais'?'var(--accent)':'var(--border)'};border-radius:6px;padding:7px 12px;font-size:10.5px;color:${dashGrupoConsumo==='principais'?'var(--accent)':'var(--text-dim)'};cursor:pointer;">Motores principais</div>
       <div class="dash-grupo-btn" data-grupo="geradores" style="background:${dashGrupoConsumo==='geradores'?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${dashGrupoConsumo==='geradores'?'var(--accent)':'var(--border)'};border-radius:6px;padding:7px 12px;font-size:10.5px;color:${dashGrupoConsumo==='geradores'?'var(--accent)':'var(--text-dim)'};cursor:pointer;">Diesel geradores</div>
     </div>
+    ${totaisHtml ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px;margin-bottom:16px;">${totaisHtml}</div>` : ''}
     <div style="color:var(--text);font-size:11px;font-weight:600;margin-bottom:6px;">Taxa de consumo ao longo do tempo</div>
     <p id="dash-aviso-offline" class="empty-hint" style="display:none;margin:0 0 6px;">Gráfico indisponível no momento (sem conexão com a internet). Os valores continuam abaixo.</p>
     <div style="position:relative;width:100%;height:220px;margin-bottom:8px;">
@@ -3545,44 +3534,43 @@ document.querySelectorAll('.dash-subtab').forEach(el => {
 });
 document.getElementById('btn-dash-atualizar').addEventListener('click', () => renderDashSubtab(dashSubtabAtual));
 
-function renderPendenciasDiarioTab(){
-  const c = document.getElementById('lista-pendencias-diario');
+function getItensPendentes(){
   const itens = [];
   ALL_EQUIP_ITEMS.forEach(eq => {
     (manutencoesDiarias[eq.id]||[]).forEach(m => {
-      if(manutencaoEhPendente(m)){
-        itens.push({equipId: eq.id, nome: eq.nome, m});
-      }
+      if(manutencaoEhPendente(m)) itens.push({equipId: eq.id, nome: eq.nome, m});
     });
   });
   itens.sort((a,b) => b.m.data.localeCompare(a.m.data));
-
-  const tabBtn = document.getElementById('tab-btn-pendencias');
-  tabBtn.textContent = itens.length ? `Pendências (${itens.length})` : 'Pendências';
-
-  if(itens.length === 0){
-    c.innerHTML = '<p class="empty-hint">Nenhuma pendência em aberto no momento.</p>';
-    return;
+  return itens;
+}
+function renderItemPendenteHtml(it){
+  const idTxt = it.m.idFluig ? ` | ID Fluig: ${idFluigComNomes(it.m.idFluig)}` : '';
+  const resultadoTxt = it.m.tipo === 'CBM' && it.m.resultado ? ` — Resultado: ${it.m.resultado}` : '';
+  const ehCorretivaPendente = it.m.tipo === 'Corretiva' && it.m.corrigido === false;
+  const ehCbmPendente = it.m.tipo === 'CBM';
+  return `<div class="pend-item" style="cursor:default;">
+    <div class="nome">${esc(it.nome)}${it.m.tipo === 'CBM' ? ' — CBM' : ''}</div>
+    <div>${esc(descricaoManut(it.m))}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${resultadoTxt}${idTxt}</div>
+    <div class="meta">Aberta em ${fmtDate(it.m.data)}</div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+      ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
+      ${ehCbmPendente ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
+      <button type="button" class="add-btn" data-editar-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Editar</button>
+    </div>
+  </div>`;
+}
+function renderPendenciasDiarioTab(){
+  const itens = getItensPendentes();
+  const tabBtn = document.getElementById('tab-btn-dashboard');
+  tabBtn.textContent = itens.length ? `Dashboard (${itens.length})` : 'Dashboard';
+  const tabDashboard = document.getElementById('tab-dashboard');
+  if(tabDashboard.style.display !== 'none' && dashSubtabAtual === 'geral'){
+    renderDashGeral();
   }
-  c.innerHTML = itens.map(it => {
-    const idTxt = it.m.idFluig ? ` | ID Fluig: ${idFluigComNomes(it.m.idFluig)}` : '';
-    const resultadoTxt = it.m.tipo === 'CBM' && it.m.resultado ? ` — Resultado: ${it.m.resultado}` : '';
-    const ehCorretivaPendente = it.m.tipo === 'Corretiva' && it.m.corrigido === false;
-    const ehCbmPendente = it.m.tipo === 'CBM';
-    return `<div class="pend-item" style="cursor:default;">
-      <div class="nome">${esc(it.nome)}${it.m.tipo === 'CBM' ? ' — CBM' : ''}</div>
-      <div>${esc(descricaoManut(it.m))}${it.m.horimetro ? ' ('+esc(it.m.horimetro)+'h)' : ''}${resultadoTxt}${idTxt}</div>
-      <div class="meta">Aberta em ${fmtDate(it.m.data)}</div>
-      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-        ${ehCorretivaPendente ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
-        ${ehCbmPendente ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
-        <button type="button" class="add-btn" data-editar-manut data-equip="${escA(it.equipId)}" data-rec="${escA(it.m.id)}" style="padding:6px 10px;font-size:11px;">Editar</button>
-      </div>
-    </div>`;
-  }).join('');
 }
 
-document.getElementById('lista-pendencias-diario').addEventListener('click', async (e) => {
+document.getElementById('dash-conteudo').addEventListener('click', async (e) => {
   const btnCorrigido = e.target.closest('[data-marcar-corrigido]');
   if(btnCorrigido){ abrirFormCorrecao(btnCorrigido); return; }
   const btnConfirmar = e.target.closest('[data-confirmar-correcao]');
@@ -3600,7 +3588,20 @@ document.getElementById('lista-pendencias-diario').addEventListener('click', asy
     return;
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
-  if(btnEditar) editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec);
+  if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
+  const linkEditarPrazoDash = e.target.closest('.link-editar-prazo-status');
+  if(linkEditarPrazoDash){
+    const chave = linkEditarPrazoDash.dataset.chave;
+    const atual = prazosColeta[chave] || '';
+    const novo = prompt('Novo intervalo em dias até a próxima coleta:', atual);
+    if(novo === null) return;
+    const dias = parseInt(novo, 10);
+    if(!dias || dias <= 0){ showToast('Digite um número válido de dias'); return; }
+    prazosColeta[chave] = dias;
+    await salvarPrazosColeta();
+    showToast('Prazo atualizado');
+    renderStatusAmostras('dash-conteudo');
+  }
 });
 
 document.getElementById('resultado-consulta').addEventListener('click', async (e) => {
@@ -3731,12 +3732,10 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-novo').style.display = tab.dataset.tab === 'novo' ? 'block' : 'none';
     document.getElementById('tab-diario').style.display = tab.dataset.tab === 'diario' ? 'block' : 'none';
     document.getElementById('tab-historico').style.display = tab.dataset.tab === 'historico' ? 'block' : 'none';
-    document.getElementById('tab-pendencias').style.display = tab.dataset.tab === 'pendencias' ? 'block' : 'none';
     document.getElementById('tab-ferramentas').style.display = tab.dataset.tab === 'ferramentas' ? 'block' : 'none';
     document.getElementById('tab-dashboard').style.display = tab.dataset.tab === 'dashboard' ? 'block' : 'none';
     if(tab.dataset.tab === 'historico') renderHistorico();
     if(tab.dataset.tab === 'diario'){ renderDiario(); renderEstatisticas(); renderProximasManutencoes(); carregarPecasFluig(); }
-    if(tab.dataset.tab === 'pendencias') renderPendenciasDiarioTab();
     if(tab.dataset.tab === 'dashboard') renderDashboard();
   });
 });
