@@ -1597,7 +1597,7 @@ ${AMOSTRA_OLEO.join(', ')}
 Histórico de amostras anteriores por equipamento (mais recente por último, se houver) — use isso pra detectar tendência de piora mesmo que o resultado desta amostra pareça Normal:
 ${JSON.stringify(historico)}`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://laudo-proxy-bram.machvel.workers.dev", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
