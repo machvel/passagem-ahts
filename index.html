@@ -981,6 +981,78 @@ const AMOSTRA_OLEO = ['ME#1','ME#2','ME#3','ME#4','DG#1','DG#2','DG#3','DG#4','R
   'BRG PS#1','BRG PS#2','BRG PS#3','BRG SB#1','BRG SB#2','BRG SB#3',
   'GEAR TOW#1','GEAR TOW#2','GEAR SPCL AFT','GEAR SPCL FWD'];
 
+// Equivalência: nome do componente como vem impresso no laudo do laboratório -> label da Amostra de Óleo no app
+const EQUIVALENCIA_LAUDO = [
+  ['PROPULSION ENGINE NO.1','ME#1'], ['PROPULSION ENGINE NO.2','ME#2'], ['PROPULSION ENGINE NO.3','ME#3'], ['PROPULSION ENGINE NO.4','ME#4'],
+  ['REDUCTION GEAR NO.1, GEARBOX','RED#1'], ['REDUCTION GEAR NO.2, GEARBOX','RED#2'],
+  ['REDUCTION GEAR NO.1','RED#1'], ['REDUCTION GEAR NO.2','RED#2'],
+  ['CONTROLLED PITCH PROPULSION NO.1','CPP#1'], ['CONTROLLED PITCH PROPULSION NO.2','CPP#2'],
+  ['SHAFT GENERATOR NO.1, DE BEARING','DE SG#1'], ['SHAFT GENERATOR NO.2, DE BEARING','DE SG#2'],
+  ['SHAFT GENERATOR NO.1, NDE BEARING','NDE SG#1'], ['SHAFT GENERATOR NO.2, NDE BEARING','NDE SG#2'],
+  ['BOW THRUSTER NO.1','BOW#1'], ['BOW THRUSTER NO.2','BOW#2'], ['BOW THRUSTER NO.3','BOW#3'],
+  ['STERN THRUSTER NO.1','STT#1'], ['STERN THRUSTER NO.2','STT#2'],
+  ['STEERING GEAR NO.1','LEME#1'], ['STEERING GEAR NO.2','LEME#2'],
+  ['MAIN GENERATOR NO.1, ENGINE','DG#1'], ['MAIN GENERATOR NO.2, ENGINE','DG#2'], ['MAIN GENERATOR NO.3, ENGINE','DG#3'], ['MAIN GENERATOR NO.4, ENGINE','DG#4'],
+  ['EMERG. GENERATOR, ENGINE','DGE'], ['EMERGENCY GENERATOR, ENGINE','DGE'],
+  ['TOW WORK WINCH, TOWING DRUM NO.1','GEAR TOW#1'], ['TOW WORK WINCH, TOWING DRUM NO.2','GEAR TOW#2'],
+  ['TOW./A.H. WINCH, SPECIAL HANDLING DRUM NO.1 GEARBOX','GEAR SPCL FWD'],
+  ['SPECIAL HANDLING DRUM NO.1','GEAR SPCL FWD'],
+  ['SERVO, HPU','SERVO'],
+  ['MAIN WINCH SYSTEM, HPU','L.P WINCH'],
+  ['SHARK JAW/TOW PIN/STOP PIN NO.1','TRIPLEX#1'], ['SHARK JAW/TOW PIN/STOP PIN NO.2','TRIPLEX#2'],
+  ['A-FRAME ANCHOR (LARS), HPU NO.1','ALAR\'S'], ['A-FRAME ANCHOR (LARS)','ALAR\'S'],
+  ['SAFE-DECK CRANE NO.1, HPU','TROLLEY#1'], ['SAFE-DECK CRANE NO.2, HPU','TROLLEY#2'],
+  ['RESCUE BOAT DAVIT, HPU','DAVIT'], ['RESCUE BOAT DAVIT','DAVIT'],
+  ['MAIN GENERATOR NO.2, DE BEARING','DE DG#2'], ['MAIN GENERATOR NO.3, DE BEARING','DE DG#3'],
+  ['MAIN GENERATOR NO.2, NDE BEARING','NDE DG#2'], ['MAIN GENERATOR NO.3, NDE BEARING','NDE DG#3'],
+  ['SHAFT NO.1, INTERMEDIATE SHAFT BEARING NO.1','BRG PS#1'], ['SHAFT NO.1, INTERMEDIATE SHAFT BEARING NO.2','BRG PS#2'], ['SHAFT NO.1, INTERMEDIATE SHAFT BEARING NO.3','BRG PS#3'],
+  ['SHAFT NO.2, INTERMEDIATE SHAFT BEARING NO.1','BRG SB#1'], ['SHAFT NO.2, INTERMEDIATE SHAFT BEARING NO.2','BRG SB#2'], ['SHAFT NO.2, INTERMEDIATE SHAFT BEARING NO.3','BRG SB#3'],
+  ['WINDLASS WINCH, HPU','WINDLESS'], ['WINDLASS WINCH','WINDLESS'],
+  ['STARTING, AIR COMPRESSOR NO.1','COMP#1'], ['STARTING, AIR COMPRESSOR NO.2','COMP#2'],
+  ['TUGGERS NO.2, HPU','AFT.TUG'], ['TUGGERS NO.2','AFT.TUG']
+];
+// Campo "Equipment No." do laudo (OilXplorer / COSAN) -> label da Amostra de Óleo no app.
+// É o identificador mais confiável: nos mancais do eixo a descrição vem cortada (sem o NO.1/2/3).
+const EQUIP_NO_LAUDO = {
+  '001':'ME#1', '002':'ME#2', '003':'ME#3', '004':'ME#4',
+  '005':'RED#1', '006':'RED#2', '007':'CPP#1', '008':'CPP#2',
+  '009':'DE SG#1', '010':'DE SG#2', '039':'NDE SG#1', '040':'NDE SG#2',
+  '011':'BOW#1', '012':'BOW#2', '013':'BOW#3', '014':'STT#1', '015':'STT#2',
+  '016':'LEME#1', '017':'LEME#2',
+  '020':'DG#1', '018':'DG#2', '019':'DG#3', '021':'DG#4', '022':'DGE',
+  '023':'GEAR TOW#1', '024':'GEAR TOW#2', '025':'GEAR SPCL FWD',
+  '027':'SERVO', '028':'L.P WINCH',
+  '029':'TRIPLEX#1', '034':'TRIPLEX#2', '030':"ALAR'S",
+  '031':'TROLLEY#1', '032':'TROLLEY#2', '033':'DAVIT',
+  '035':'DE DG#2', '036':'NDE DG#2', '037':'DE DG#3', '038':'NDE DG#3',
+  // Mancais intermediários: 041-043 = 1P, 2P, 3P (eixo BB); 044-046 = 1S, 2S, 3S (eixo BE). Ordem confirmada pelo CFM. O número 026 não existe.
+  '041':'BRG PS#1', '042':'BRG PS#2', '043':'BRG PS#3',
+  '044':'BRG SB#1', '045':'BRG SB#2', '046':'BRG SB#3',
+  '047':'WINDLESS', '048':'COMP#1', '049':'COMP#2', '050':'AFT.TUG'
+};
+function identificarPorNumeroLaudo(numero){
+  const dig = String(numero == null ? '' : numero).replace(/\D/g, '');
+  if(!dig) return null;
+  return EQUIP_NO_LAUDO[dig.padStart(3, '0')] || null;
+}
+// Deixa o texto comparável: maiúsculas, sem acento, sem pontuação ("NO. 1", "NO.1" e "No 1" viram a mesma coisa)
+function normalizarNomeLaudo(texto){
+  return String(texto || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]+/g, ' ').replace(/\bNO (\d)/g, 'NO$1').trim();
+}
+// Recebe o nome do componente como está no laudo e devolve o label do app (ex: 'STT#2'), ou null
+function identificarEquipamentoLaudo(nomeNoLaudo){
+  const alvo = ' ' + normalizarNomeLaudo(nomeNoLaudo) + ' ';
+  if(alvo.trim() === '') return null;
+  let melhor = null;
+  for(const [nome, label] of EQUIVALENCIA_LAUDO){
+    const chave = ' ' + normalizarNomeLaudo(nome) + ' ';
+    if(alvo === chave) return label;
+    if(alvo.includes(chave) && (!melhor || chave.length > melhor.tam)) melhor = { label, tam: chave.length };
+  }
+  return melhor ? melhor.label : null;
+}
+
 const LUBRIFICANTES = ['ADL 40','15W-40','600 XP 68','600 XP 320','10 EXCEL 46','600 XP 150','10 EXCEL 32','10 EXCEL 68','DTE 10 EXCEL 100','RARUS 827'];
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -1956,24 +2028,76 @@ function arquivoParaBase64(file){
   });
 }
 
+// Extrai os objetos completos de dentro de "laudos": [ ... ] mesmo que a resposta tenha sido cortada no meio
+function extrairLaudosDoTexto(texto){
+  const pos = texto.indexOf('"laudos"');
+  const inicio = texto.indexOf('[', pos === -1 ? 0 : pos);
+  if(inicio === -1) return [];
+  const itens = [];
+  let prof = 0, emString = false, escape = false, comeco = -1;
+  for(let i = inicio + 1; i < texto.length; i++){
+    const c = texto[i];
+    if(emString){
+      if(escape) escape = false;
+      else if(c === '\\') escape = true;
+      else if(c === '"') emString = false;
+      continue;
+    }
+    if(c === '"'){ emString = true; continue; }
+    if(c === '{'){ if(prof === 0) comeco = i; prof++; }
+    else if(c === '}'){
+      prof--;
+      if(prof === 0 && comeco !== -1){
+        try{ itens.push(JSON.parse(texto.slice(comeco, i + 1))); }catch(e){}
+        comeco = -1;
+      }
+    }
+    else if(c === ']' && prof === 0) break;
+  }
+  return itens;
+}
+
+// Cada PDF do laboratório traz VÁRIOS equipamentos. Devolve { laudos: [...], cortado: true|false }
 async function analisarLaudoPdf(file){
   const base64 = await arquivoParaBase64(file);
   const historico = construirHistoricoParaPrompt();
-  const prompt = `Você é um especialista em análise de óleo lubrificante industrial/naval de um AHTS (Anchor Handling Tug Supply). Analise o laudo em anexo (PDF de laboratório) e responda SOMENTE com um JSON válido, sem markdown, sem texto antes ou depois, exatamente neste formato:
+  const prompt = `Você é um especialista em análise de óleo lubrificante industrial/naval de um AHTS (Anchor Handling Tug Supply). O PDF em anexo é um conjunto de laudos "Analysis Report" do laboratório (OilXplorer Marine / COSAN). Cada equipamento ocupa normalmente 2 páginas seguidas, com o mesmo cabeçalho e o mesmo número "SI". Percorra o PDF INTEIRO e devolva UM item para CADA equipamento (cada número SI diferente), sem pular nenhum e sem repetir.
+
+Responda SOMENTE com um JSON válido, sem markdown, sem texto antes ou depois, exatamente neste formato:
 
 {
-  "equipamentoIdentificado": "<nome EXATO de uma das opções da lista abaixo, ou null se não tiver certeza suficiente>",
-  "subItemIdentificado": "<se aplicável, o subitem específico mencionado no laudo (ex: 1P, Tow BB), ou null>",
-  "confiancaIdentificacao": "alta" | "media" | "baixa",
-  "resultadoLaboratorio": "Normal" | "Alerta" | "Crítico",
-  "valoresExtraidos": { "<nome do parâmetro>": <valor>, ... },
-  "resumoAchados": "<resumo curto, 1-2 frases, do que o laudo mostrou>",
-  "tendenciaPreocupante": true | false,
-  "resumoTendencia": "<se tendenciaPreocupante for true, explique a tendência comparando com o histórico abaixo; senão, string vazia>"
+  "laudos": [
+    {
+      "numeroEquipamento": "<campo 'Equipment No.' do cabeçalho, com 3 dígitos, ex: 007>",
+      "componenteLaudo": "<campo 'Description' do cabeçalho copiado EXATAMENTE como impresso (ex: MAIN GENERATOR NO.2, DE BEARING). Não traduza, não abrevie, não complete>",
+      "equipamentoIdentificado": "<nome EXATO de uma das opções da lista abaixo, ou null se não tiver certeza suficiente>",
+      "dataAmostra": "<data da amostra mais recente = ÚLTIMA coluna da linha 'Date Sampled', formato AAAA-MM-DD, ou null>",
+      "statusLaudo": "<palavra impressa na FAIXA COLORIDA do canto superior direito da página, ao lado do título Analysis Report: NORMAL, CAUTION ou ALERT>",
+      "resultadoLaboratorio": "Normal" | "Cuidado" | "Alerta",
+      "valoresExtraidos": { "<nome do parâmetro>": <valor>, ... },
+      "resumoAchados": "<resumo curto, 1 frase em português, baseado no bloco Comments>",
+      "tendenciaPreocupante": true | false,
+      "resumoTendencia": "<se tendenciaPreocupante for true, explique a tendência em 1 frase; senão, string vazia>"
+    }
+  ]
 }
 
-Lista de equipamentos possíveis (escolha o mais próximo pelo texto do laudo, usando exatamente um desses nomes):
+Regras:
+- O status vem SOMENTE da faixa colorida do canto superior direito: NORMAL => "Normal"; CAUTION => "Cuidado"; ALERT => "Alerta". Não reavalie por conta própria.
+- IGNORE as células pintadas de amarelo ou vermelho dentro das tabelas para definir o status: elas marcam valores de amostras antigas (colunas anteriores) ou parâmetros isolados. Um laudo com faixa CAUTION continua "Cuidado" mesmo que tenha células vermelhas; um laudo com faixa NORMAL continua "Normal" mesmo que tenha células coloridas.
+- Use sempre a amostra MAIS RECENTE, que é a ÚLTIMA coluna (mais à direita) de cada tabela.
+- Em "valoresExtraidos" coloque no máximo 8 parâmetros principais da última coluna (viscosidade, oxidação, água, TBN, ferro, cobre, estanho, código ISO), com os números como impressos.
+- "tendenciaPreocupante" só deve ser true se a última amostra mostrar piora clara em relação às colunas anteriores ou ao histórico abaixo.
+- Seja conciso e não use aspas duplas dentro dos textos.
+
+Lista de equipamentos possíveis (use exatamente um desses nomes em "equipamentoIdentificado"):
 ${AMOSTRA_OLEO.join(', ')}
+
+Equivalência pelo campo 'Equipment No.' (número => nome na lista acima). É a forma preferida de identificar:
+${Object.entries(EQUIP_NO_LAUDO).sort((x, y) => x[0].localeCompare(y[0])).map(([n, label]) => n + ' => ' + label).join('\n')}
+
+Equivalência pelo campo 'Description' (use se o número não estiver na tabela acima):
+${EQUIVALENCIA_LAUDO.map(([nome, label]) => nome + ' => ' + label).join('\n')}
 
 Histórico de amostras anteriores por equipamento (mais recente por último, se houver) — use isso pra detectar tendência de piora mesmo que o resultado desta amostra pareça Normal:
 ${JSON.stringify(historico)}`;
@@ -1983,7 +2107,7 @@ ${JSON.stringify(historico)}`;
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 1000,
+      max_tokens: 16000,
       messages: [{
         role: "user",
         content: [
@@ -1993,11 +2117,36 @@ ${JSON.stringify(historico)}`;
       }]
     })
   });
-  const data = await response.json();
+  let data;
+  try{ data = await response.json(); }
+  catch(e){ throw new Error('Resposta inválida do servidor da IA (HTTP ' + response.status + '). Tente novamente.'); }
+  if(data && data.error) throw new Error('IA: ' + (data.error.message || data.error.type || 'erro desconhecido'));
   const textBlock = (data.content || []).find(b => b.type === 'text');
   if(!textBlock) throw new Error('Resposta da IA sem texto (verifique sua conexão)');
   const limpo = textBlock.text.replace(/```json|```/g, '').trim();
-  return JSON.parse(limpo);
+  let cortado = data.stop_reason === 'max_tokens';
+  let laudos = null;
+  try{
+    const ini = limpo.indexOf('{'), fim = limpo.lastIndexOf('}');
+    const obj = JSON.parse(ini !== -1 && fim > ini ? limpo.slice(ini, fim + 1) : limpo);
+    laudos = Array.isArray(obj) ? obj : (Array.isArray(obj.laudos) ? obj.laudos : [obj]);
+  }catch(e){
+    // resposta cortada ou com defeito: aproveita os equipamentos que vieram completos
+    laudos = extrairLaudosDoTexto(limpo);
+    cortado = true;
+  }
+  if(!laudos || laudos.length === 0) throw new Error('A IA não devolveu nenhum equipamento legível para este arquivo. Processe de novo.');
+  laudos.forEach(l => {
+    // A tabela de equivalência manda: se o nome do laudo bater com ela, usa o label da tabela
+    const porNumero = identificarPorNumeroLaudo(l.numeroEquipamento);
+    const porTabela = (porNumero && MAPA_LABEL_PARA_EQUIP[porNumero]) ? porNumero : identificarEquipamentoLaudo(l.componenteLaudo);
+    if(porTabela && MAPA_LABEL_PARA_EQUIP[porTabela]) l.equipamentoIdentificado = porTabela;
+    else if(!MAPA_LABEL_PARA_EQUIP[l.equipamentoIdentificado]) l.equipamentoIdentificado = null;
+    l.subItemIdentificado = null;
+    // o status impresso pelo laboratório manda: CAUTION = Cuidado (amarelo), ALERT = Alerta (vermelho)
+    l.resultadoLaboratorio = normalizarResultadoLaudo(l.statusLaudo || l.resultadoLaboratorio);
+  });
+  return { laudos, cortado };
 }
 
 let laudosProcessadosPendentes = [];
@@ -2014,20 +2163,30 @@ document.getElementById('btn-processar-laudos').addEventListener('click', async 
     status.textContent = `Processando ${i+1}/${files.length}: ${files[i].name}...`;
     try{
       const resultado = await analisarLaudoPdf(files[i]);
-      laudosProcessadosPendentes.push({ arquivo: files[i].name, ...resultado, erro: null });
+      resultado.laudos.forEach(l => laudosProcessadosPendentes.push({ arquivo: files[i].name, ...l, erro: null }));
+      if(resultado.cortado) laudosProcessadosPendentes.push({ arquivo: files[i].name, erro: `A resposta da IA foi cortada: só ${resultado.laudos.length} equipamento(s) deste arquivo foram lidos. Confira com o PDF e registre os que faltarem pelo CBM.` });
     }catch(e){
       console.error('Erro ao processar laudo:', e);
       laudosProcessadosPendentes.push({ arquivo: files[i].name, erro: e.message || 'Erro desconhecido ao processar' });
     }
   }
-  status.textContent = `${files.length} laudo(s) processado(s). Confira abaixo antes de confirmar.`;
+  const qtdEquip = laudosProcessadosPendentes.filter(r => !r.erro).length;
+  status.textContent = `${files.length} arquivo(s) processado(s), ${qtdEquip} equipamento(s) encontrado(s). Confira abaixo antes de confirmar.`;
   renderResultadoLaudos();
 });
 
 function renderResultadoLaudos(){
   const resultadoEl = document.getElementById('resultado-laudos');
   const temAlgumValido = laudosProcessadosPendentes.some(r => !r.erro && r.equipamentoIdentificado && MAPA_LABEL_PARA_EQUIP[r.equipamentoIdentificado]);
-  resultadoEl.innerHTML = laudosProcessadosPendentes.map((r) => {
+  const seletorEquip = (r, idx) => `<div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="font-size:10px;color:var(--text-dim);">Equipamento:</span>
+      <select class="sel-equip-laudo" data-idx="${idx}" style="padding:5px 8px;font-size:11px;">
+        <option value="">— escolher —</option>
+        ${AMOSTRA_OLEO.filter(l => MAPA_LABEL_PARA_EQUIP[l]).map(l => `<option value="${esc(l)}"${l === r.equipamentoIdentificado ? ' selected' : ''}>${esc(l)}</option>`).join('')}
+      </select>
+    </div>`;
+  const linhaLaudo = (r) => r.componenteLaudo ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">No laudo: ${r.numeroEquipamento ? esc(String(r.numeroEquipamento)) + ' · ' : ''}${esc(r.componenteLaudo)}${r.statusLaudo ? ' · ' + esc(String(r.statusLaudo)) : ''}</div>` : '';
+  resultadoEl.innerHTML = laudosProcessadosPendentes.map((r, idx) => {
     if(r.erro){
       return `<div style="background:var(--red-dim);border:1px solid var(--red);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:600;color:var(--red);">${esc(r.arquivo)}</div>
@@ -2038,7 +2197,9 @@ function renderResultadoLaudos(){
     if(!info){
       return `<div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:600;">${esc(r.arquivo)}</div>
-        <div style="font-size:10.5px;color:var(--amber);">Não foi possível identificar o equipamento com confiança. Registre manualmente pelo CBM.</div>
+        ${linhaLaudo(r)}
+        <div style="font-size:10.5px;color:var(--amber);">Não foi possível identificar o equipamento automaticamente. Escolha abaixo para incluir este laudo.</div>
+        ${seletorEquip(r, idx)}
       </div>`;
     }
     const corTag = corResultadoAmostra(r.resultadoLaboratorio || 'Normal');
@@ -2047,44 +2208,69 @@ function renderResultadoLaudos(){
         <div style="font-size:11.5px;font-weight:600;">${esc(r.equipamentoIdentificado)}${r.subItemIdentificado ? ': '+esc(r.subItemIdentificado) : ''}</div>
         <div style="background:${corTag.bg};color:${corTag.fg};font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;">${esc((r.resultadoLaboratorio||'Normal').toUpperCase())}</div>
       </div>
-      <div style="font-size:10px;color:var(--text-faint);margin-bottom:4px;">${esc(r.arquivo)}</div>
+      <div style="font-size:10px;color:var(--text-faint);margin-bottom:4px;">${esc(r.arquivo)}${r.dataAmostra ? ' · amostra de ' + esc(r.dataAmostra) : ''}</div>
+      ${linhaLaudo(r)}
       <div style="font-size:10.5px;color:var(--text-dim);margin-bottom:4px;">${esc(r.resumoAchados || '')}</div>
       ${r.tendenciaPreocupante ? `<div style="background:var(--amber-dim);border-left:3px solid var(--amber);border-radius:0 6px 6px 0;padding:6px 9px;margin-top:4px;">
         <div style="color:var(--amber);font-size:10px;font-weight:600;">⚠ Atenção precoce</div>
         <div style="color:var(--amber);font-size:9.5px;">${esc(r.resumoTendencia || '')}</div>
       </div>` : ''}
+      ${seletorEquip(r, idx)}
     </div>`;
   }).join('') + (temAlgumValido ? `<button class="save-btn" id="btn-confirmar-laudos" type="button" style="margin-top:8px;">Confirmar e criar registros de CBM</button>` : '');
 
   const btnConfirmar = document.getElementById('btn-confirmar-laudos');
   if(btnConfirmar) btnConfirmar.addEventListener('click', confirmarLaudosProcessados);
+  resultadoEl.querySelectorAll('.sel-equip-laudo').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const r = laudosProcessadosPendentes[parseInt(sel.dataset.idx, 10)];
+      if(!r) return;
+      r.equipamentoIdentificado = sel.value || null;
+      r.subItemIdentificado = null;
+      renderResultadoLaudos();
+    });
+  });
 }
 
 async function confirmarLaudosProcessados(){
   const hojeStr = new Date().toISOString().slice(0,10);
-  let salvos = 0;
+  const limiteRecente = new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10);
+  let salvos = 0, substituidos = 0;
+  // Um laudo reimportado SUBSTITUI o registro anterior da mesma amostra, em vez de criar outro por cima.
+  // "Mesma amostra" = mesma data de amostra; registros antigos sem essa data só são substituídos se foram importados nos últimos 7 dias.
+  const ehMesmaAmostra = (antigo, dataAmostra) => antigo.dataAmostra ? (!!dataAmostra && antigo.dataAmostra === dataAmostra) : (antigo.data >= limiteRecente);
   for(const r of laudosProcessadosPendentes){
     if(r.erro || !r.equipamentoIdentificado) continue;
     const info = MAPA_LABEL_PARA_EQUIP[r.equipamentoIdentificado];
     if(!info) continue;
     const resultado = r.resultadoLaboratorio || 'Normal';
-    const precisaDescricao = resultado === 'Alerta' || resultado === 'Crítico';
+    const precisaDescricao = resultadoAnormal(resultado);
     let descricaoFinal = precisaDescricao ? (r.resumoAchados || 'Ver laudo') : 'Amostra coletada';
     if(r.tendenciaPreocupante && r.resumoTendencia) descricaoFinal += ` (Atenção: ${r.resumoTendencia})`;
     if(!manutencoesDiarias[info.equipId]) manutencoesDiarias[info.equipId] = [];
+    const dataAmostra = /^\d{4}-\d{2}-\d{2}$/.test(String(r.dataAmostra || '')) ? r.dataAmostra : null;
+    const repetidos = manutencoesDiarias[info.equipId].filter(m => m.tipo === 'CBM' && m.origemLaudo && (m.subItem || null) === (info.subItem || null)
+      && (m.subTipoColeta || 'oleo') === 'oleo' && ehMesmaAmostra(m, dataAmostra));
+    if(repetidos.length){
+      const idsRepetidos = repetidos.map(m => m.id);
+      manutencoesDiarias[info.equipId] = manutencoesDiarias[info.equipId].filter(m => !idsRepetidos.includes(m.id));
+      for(const idRep of idsRepetidos) await salvarIdExcluido('manutencoes', idRep);
+      substituidos += repetidos.length;
+    }
     manutencoesDiarias[info.equipId].push({
-      id: uid(), data: hojeStr, descricao: descricaoFinal, subItem: info.subItem, horimetro: '', tipo: 'CBM',
+      id: uid(), data: hojeStr, dataAmostra, descricao: descricaoFinal, subItem: info.subItem, horimetro: '', tipo: 'CBM',
       corrigido: null, idFluig: '', statusEquip: null, resultado, subTipoColeta: 'oleo',
       atencaoPrecoce: !!r.tendenciaPreocupante, notaAtencaoPrecoce: r.resumoTendencia || '', origemLaudo: true
     });
     const chaveHist = chaveAmostraMapa(info.equipId, info.subItem);
     if(!laudosHistorico[chaveHist]) laudosHistorico[chaveHist] = [];
-    laudosHistorico[chaveHist].push({ data: hojeStr, valores: r.valoresExtraidos || {}, resultado, atencaoPrecoce: !!r.tendenciaPreocupante, notaTendencia: r.resumoTendencia || '' });
+    laudosHistorico[chaveHist] = laudosHistorico[chaveHist].filter(h => !ehMesmaAmostra(h, dataAmostra));
+    laudosHistorico[chaveHist].push({ data: hojeStr, dataAmostra, valores: r.valoresExtraidos || {}, resultado, atencaoPrecoce: !!r.tendenciaPreocupante, notaTendencia: r.resumoTendencia || '' });
     salvos++;
   }
   await salvarManutencoesDiarias();
   await salvarLaudosHistorico();
-  document.getElementById('status-laudos').textContent = `${salvos} registro(s) de CBM criado(s) com sucesso.`;
+  document.getElementById('status-laudos').textContent = `${salvos} registro(s) de CBM criado(s) com sucesso.` + (substituidos ? ` ${substituidos} registro(s) anterior(es) da mesma amostra foram substituídos.` : '');
   document.getElementById('resultado-laudos').innerHTML = '';
   laudosProcessadosPendentes = [];
   document.getElementById('h-laudos-pdf').value = '';
@@ -2163,7 +2349,7 @@ function renderManutencaoDraft(){
     }else if(usaSubItens){
       const opcoesSubItens = SUBITENS_POR_EQUIP[item.itemId];
       const subItensSelecionados = item.subItens || [];
-      const ocultarDescricaoOleo = usaCBM && item.subTipoColeta === 'oleo' && item.resultado !== 'Alerta' && item.resultado !== 'Crítico';
+      const ocultarDescricaoOleo = usaCBM && item.subTipoColeta === 'oleo' && !resultadoAnormal(item.resultado);
       campoDetalheHtml = `<div style="flex:1 1 100%;">
         <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:5px;">Selecione o(s) item(ns) específico(s)</label>
         <div class="subitens-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:8px;">
@@ -2237,9 +2423,9 @@ function renderManutencaoDraft(){
       </div>`;
       if(!usaMultiOleo){
         resultadoCbmHtml = `<select class="sel-resultado-cbm" style="flex:0 0 150px;">
-          <option value="Normal" ${item.resultado !== 'Alerta' && item.resultado !== 'Crítico' ? 'selected' : ''}>Normal</option>
-          <option value="Alerta" ${item.resultado === 'Alerta' ? 'selected' : ''}>Alerta</option>
-          <option value="Crítico" ${item.resultado === 'Crítico' ? 'selected' : ''}>Crítico</option>
+          <option value="Normal" ${!resultadoAnormal(item.resultado) ? 'selected' : ''}>Normal</option>
+          <option value="Cuidado" ${item.resultado === 'Cuidado' ? 'selected' : ''}>Cuidado (caution)</option>
+          <option value="Alerta" ${item.resultado === 'Alerta' || item.resultado === 'Crítico' ? 'selected' : ''}>Alerta (alert)</option>
         </select>`;
       }
       if(!usaMultiOleo && item.itemId && item.subTipoColeta === 'oleo'){
@@ -2792,7 +2978,7 @@ function similaridadeTexto(a, b){
 
 function manutencaoEhPendente(m){
   if(m.tipo === 'Corretiva' && (m.corrigido === false || m.statusEquip === 'nao_operacional')) return true;
-  if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico') && !m.resolvidoCbm) return true;
+  if(m.tipo === 'CBM' && (resultadoAnormal(m.resultado)) && !m.resolvidoCbm) return true;
   return false;
 }
 
@@ -3199,7 +3385,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       if(item.editandoId && item.editandoEquipId && manutencoesDiarias[item.editandoEquipId]){
         manutencoesDiarias[item.editandoEquipId] = manutencoesDiarias[item.editandoEquipId].filter(m => m.id !== item.editandoId);
       }
-      const ehCbmOleoNormalSub = item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.resultado !== 'Alerta' && item.resultado !== 'Crítico';
+      const ehCbmOleoNormalSub = item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && !resultadoAnormal(item.resultado);
       const freeText = item.descricao.trim() || (ehCbmOleoNormalSub ? 'Amostra coletada' : '');
       subItensSelecionados.forEach((subItem, idx) => {
         const registroAtualizado = {
@@ -3226,7 +3412,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       return;
     }
 
-    const ehCbmOleoNormal = item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && item.resultado !== 'Alerta' && item.resultado !== 'Crítico';
+    const ehCbmOleoNormal = item.tipo === 'CBM' && item.subTipoColeta === 'oleo' && !resultadoAnormal(item.resultado);
     const textoFinal = usaSeletorPreventivo
       ? (item.manutTipo === 'Outros' ? (item.descricao.trim() || 'Outros') : item.manutTipo)
       : (item.descricao.trim() || (ehCbmOleoNormal ? 'Amostra coletada' : ''));
@@ -3261,8 +3447,8 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       status.textContent = 'Nada foi salvo: escolha pelo menos um item específico (ex: BB, BE, 1, 2) antes de salvar.';
       showToast('Selecione um item específico antes de salvar');
     }else if(descricaoFaltando){
-      status.textContent = 'Nada foi salvo: descreva o que foi encontrado nos equipamentos com Alerta ou Crítico.';
-      showToast('Preencha a descrição nos equipamentos com Alerta/Crítico');
+      status.textContent = 'Nada foi salvo: descreva o que foi encontrado nos equipamentos com Cuidado ou Alerta.';
+      showToast('Preencha a descrição nos equipamentos com Cuidado/Alerta');
     }else{
       status.textContent = 'Nenhum item preenchido.';
     }
@@ -3289,7 +3475,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   if(servicosSalvos) partes.push(`${servicosSalvos} serviço(s) geral(is)`);
   const avisos = [];
   if(subItemFaltando) avisos.push('um item não foi salvo por falta de seleção específica (BB, BE, 1, 2...)');
-  if(descricaoFaltando) avisos.push('um ou mais itens com Alerta/Crítico não foram salvos por falta de descrição');
+  if(descricaoFaltando) avisos.push('um ou mais itens com Cuidado/Alerta não foram salvos por falta de descrição');
   status.textContent = `${partes.join(' e ')} salvo(s) para ${fmtDate(data)}.` + (avisos.length ? ' Atenção: ' + avisos.join('; ') + '.' : '');
   showToast(avisos.length ? 'Salvo, mas alguns itens foram ignorados — veja o aviso' : 'Registro salvo');
 });
@@ -3336,11 +3522,22 @@ document.getElementById('alerta-vencimentos').addEventListener('click', (e) => {
   }
 });
 
+// Status do laboratório: Normal (verde), Cuidado = caution (amarelo), Alerta = alert (vermelho). 'Crítico' é o nome antigo do vermelho.
+function resultadoAnormal(resultado){ return resultado === 'Cuidado' || resultado === 'Alerta' || resultado === 'Crítico'; }
+function normalizarResultadoLaudo(valor){
+  const t = String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if(/alert|critic|sever|abnormal|anormal|urgent/.test(t)) return 'Alerta';
+  if(/caution|cuidado|atenc|marginal|warning|monitor/.test(t)) return 'Cuidado';
+  return 'Normal';
+}
 function corResultadoAmostra(resultado){
-  if(resultado === 'Alerta') return { bg: '#f0c020', fg: '#332405' };
-  if(resultado === 'Crítico') return { bg: '#e0392b', fg: '#fff' };
+  if(resultado === 'Cuidado') return { bg: '#f0c020', fg: '#332405' };
+  if(resultado === 'Alerta' || resultado === 'Crítico') return { bg: '#e0392b', fg: '#fff' };
   return { bg: '#2ecc71', fg: '#fff' };
 }
+const DIAS_AVISO_COLETA = 7; // "vence em breve" = faltam até 7 dias
+let statusAmostrasFiltro = 'todas';
+let statusAmostrasBusca = '';
 function renderStatusAmostras(idDestino){
   const resultEl = document.getElementById(idDestino || 'resultado-consulta');
   const grupos = {};
@@ -3351,52 +3548,131 @@ function renderStatusAmostras(idDestino){
       if(!grupos[chave]) grupos[chave] = { equipId: eq.id, equipNome: eq.nome, subItem: m.subItem, subTipo };
       const g = grupos[chave];
       if(!m.origemLaudo && (!g.ultimaColeta || m.data > g.ultimaColeta.data)) g.ultimaColeta = m;
-      if(m.origemLaudo && (!g.ultimoLaudo || m.data > g.ultimoLaudo.data)) g.ultimoLaudo = m;
+      if(m.origemLaudo && (!g.ultimoLaudo || m.data >= g.ultimoLaudo.data)) g.ultimoLaudo = m;
     });
   });
   Object.values(grupos).forEach(g => { if(!g.ultimaColeta) g.ultimaColeta = g.ultimoLaudo; });
   const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const linhas = Object.values(grupos).sort((a,b) => b.ultimaColeta.data.localeCompare(a.ultimaColeta.data)).map(g => {
+  const itens = Object.values(grupos).map(g => {
     const chavePrazo = chavePrazoColeta(g.equipId, g.subItem, g.subTipo);
     const prazo = prazosColeta[chavePrazo];
-    let diasTxt = 'sem prazo definido';
+    let diasRestantes = null;
     if(prazo){
       const dataProxima = new Date(g.ultimaColeta.data+'T00:00:00');
       dataProxima.setDate(dataProxima.getDate() + prazo);
-      const diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
-      diasTxt = diasRestantes < 0 ? `vencida há ${Math.abs(diasRestantes)} dias` : `faltam ${diasRestantes} dias`;
+      diasRestantes = Math.round((dataProxima - hoje) / (1000*60*60*24));
     }
-    const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
+    const situacao = diasRestantes === null ? 'semprazo' : (diasRestantes < 0 ? 'vencida' : (diasRestantes <= DIAS_AVISO_COLETA ? 'perto' : 'emdia'));
     const nomeExib = g.subItem ? `${g.equipNome}: ${g.subItem}` : g.equipNome;
-    const resultadoTxt = (g.ultimoLaudo && g.ultimoLaudo.resultado) || 'Normal';
-    const corTag = corResultadoAmostra(resultadoTxt);
-    const temAtencaoPrecoce = !!(g.ultimoLaudo && g.ultimoLaudo.atencaoPrecoce);
+    const labelAmostra = g.subTipo === 'oleo' ? (MAPA_AMOSTRA_EQUIP[chaveAmostraMapa(g.equipId, g.subItem)] || '') : '';
     const oleoLabel = g.subTipo === 'oleo' ? tipoOleoEquip[chaveTipoOleo(g.equipId, g.subItem)] : null;
-    const infoExtra = [];
-    if(oleoLabel) infoExtra.push(`óleo: ${oleoLabel}`);
-    if(g.ultimaColeta.horimetro) infoExtra.push(`horímetro: ${g.ultimaColeta.horimetro}h`);
-    return `<div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-        <div>
-          <div style="color:#1a2332;font-size:12px;font-weight:600;">${icone} ${esc(nomeExib)}</div>
-          <div style="color:#6b7688;font-size:10px;">coletado ${fmtDate(g.ultimaColeta.data)} — ${diasTxt}</div>
-          <div style="color:#6b7688;font-size:10px;">${g.ultimoLaudo ? `último laudo recebido em ${fmtDate(g.ultimoLaudo.data)}` : 'nenhum laudo recebido ainda'}</div>
-          ${infoExtra.length ? `<div style="color:#6b7688;font-size:10px;">${esc(infoExtra.join(' · '))}</div>` : ''}
-          <span class="link-editar-prazo-status" data-chave="${escA(chavePrazo)}" style="font-size:9.5px;color:#3b6fd6;text-decoration:underline;cursor:pointer;">editar prazo</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
-          <div style="background:${corTag.bg};color:${corTag.fg};font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:5px;letter-spacing:.02em;white-space:nowrap;">${esc(resultadoTxt.toUpperCase())}</div>
-          ${temAtencaoPrecoce ? `<div style="background:#f0c020;color:#332405;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:5px;white-space:nowrap;">ATENÇÃO PRECOCE</div>` : ''}
-        </div>
-      </div>
-      ${temAtencaoPrecoce ? `<div style="color:#8a6224;font-size:10px;margin-top:6px;">${esc(g.ultimoLaudo.notaAtencaoPrecoce || '')}</div>` : ''}
-    </div>`;
+    const resultadoTxt = (g.ultimoLaudo && g.ultimoLaudo.resultado) || 'Normal';
+    const textoBusca = [nomeExib, labelAmostra, oleoLabel || '', resultadoTxt, g.subTipo === 'vibracao' ? 'vibracao vibração' : 'oleo óleo'].join(' ')
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return { g, chavePrazo, diasRestantes, situacao, nomeExib, labelAmostra, oleoLabel, resultadoTxt, textoBusca };
   });
-  if(linhas.length === 0){
+  if(itens.length === 0){
     resultEl.innerHTML = '<div class="busca-resultado-wrap"><p class="empty-hint">Nenhuma coleta (Vibração ou Amostra de Óleo) registrada ainda.</p></div>';
     return;
   }
-  resultEl.innerHTML = `<div class="busca-resultado-wrap">${linhas.join('')}</div>`;
+  // Ordem por urgência: vencidas (mais atrasada primeiro), vence em breve, em dia, sem prazo
+  const pesoSituacao = { vencida: 0, perto: 1, emdia: 2, semprazo: 3 };
+  itens.sort((x, y) => {
+    if(pesoSituacao[x.situacao] !== pesoSituacao[y.situacao]) return pesoSituacao[x.situacao] - pesoSituacao[y.situacao];
+    if(x.diasRestantes !== null && y.diasRestantes !== null && x.diasRestantes !== y.diasRestantes) return x.diasRestantes - y.diasRestantes;
+    return x.nomeExib.localeCompare(y.nomeExib);
+  });
+  const cont = { vencida: 0, perto: 0, emdia: 0, semprazo: 0 };
+  itens.forEach(it => { cont[it.situacao]++; });
+
+  const cartaoResumo = (rotulo, valor, bg, fg) => `<div style="flex:1 1 90px;background:${bg};border-radius:8px;padding:8px 10px;">
+      <div style="font-size:10px;color:${fg};">${rotulo}</div>
+      <div style="font-size:20px;font-weight:700;color:${fg};line-height:1.2;">${valor}</div>
+    </div>`;
+  const botaoFiltro = (id, rotulo) => {
+    const ativo = statusAmostrasFiltro === id;
+    return `<button type="button" class="btn-filtro-status-amostra" data-filtro="${id}" style="font-size:10.5px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid ${ativo ? '#1a2332' : '#c3cad6'};background:${ativo ? '#1a2332' : '#fff'};color:${ativo ? '#fff' : '#1a2332'};">${rotulo}</button>`;
+  };
+  resultEl.innerHTML = `<div class="busca-resultado-wrap">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      ${cartaoResumo('Vencidas', cont.vencida, '#fbe3e1', '#a3271c')}
+      ${cartaoResumo(`Vencem em ${DIAS_AVISO_COLETA} dias`, cont.perto, '#fdf1c7', '#7a5a05')}
+      ${cartaoResumo('Em dia', cont.emdia, '#fff', '#1a2332')}
+      ${cont.semprazo ? cartaoResumo('Sem prazo', cont.semprazo, '#e3e7ee', '#4a5566') : ''}
+    </div>
+    <input type="search" class="busca-status-amostra" placeholder="Buscar equipamento (ex: STT#2, CPP, mancal)" value="${escA(statusAmostrasBusca)}" style="width:100%;box-sizing:border-box;padding:8px 10px;font-size:12px;border:1px solid #c3cad6;border-radius:6px;background:#fff;color:#1a2332;margin-bottom:8px;">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      ${botaoFiltro('todas', 'Todas')}
+      ${botaoFiltro('vencida', 'Só vencidas')}
+      ${botaoFiltro('perto', `Vencem em ${DIAS_AVISO_COLETA} dias`)}
+      ${cont.semprazo ? botaoFiltro('semprazo', 'Sem prazo') : ''}
+    </div>
+    <div class="lista-status-amostra"></div>
+  </div>`;
+
+  const listaEl = resultEl.querySelector('.lista-status-amostra');
+  const desenharLista = () => {
+    const termos = statusAmostrasBusca.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
+    const visiveis = itens.filter(it => (statusAmostrasFiltro === 'todas' || it.situacao === statusAmostrasFiltro) && termos.every(t => it.textoBusca.includes(t)));
+    if(visiveis.length === 0){
+      listaEl.innerHTML = '<p class="empty-hint" style="padding:6px 0;">Nenhuma amostra encontrada com esse filtro ou busca.</p>';
+      return;
+    }
+    listaEl.innerHTML = visiveis.map(it => {
+      const g = it.g;
+      const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
+      const corTag = corResultadoAmostra(it.resultadoTxt);
+      const temAtencaoPrecoce = !!(g.ultimoLaudo && g.ultimoLaudo.atencaoPrecoce);
+      const infoExtra = [];
+      if(it.oleoLabel) infoExtra.push(`óleo: ${it.oleoLabel}`);
+      if(g.ultimaColeta.horimetro) infoExtra.push(`horímetro: ${g.ultimaColeta.horimetro}h`);
+      let borda = 'border:1px solid transparent;';
+      let diasTxt = 'sem prazo definido';
+      if(it.situacao === 'vencida'){
+        borda = 'border:1px solid #e0392b;border-left:5px solid #e0392b;';
+        diasTxt = `vencida há ${Math.abs(it.diasRestantes)} dias`;
+      } else if(it.situacao === 'perto'){
+        borda = 'border:1px solid #f0c020;border-left:5px solid #f0c020;';
+        diasTxt = it.diasRestantes === 0 ? 'vence hoje' : `faltam ${it.diasRestantes} dias`;
+      } else if(it.situacao === 'emdia'){
+        diasTxt = `faltam ${it.diasRestantes} dias`;
+      }
+      return `<div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);${borda}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="color:#1a2332;font-size:12px;font-weight:600;">${icone} ${esc(it.nomeExib)}${it.labelAmostra ? ` <span style="color:#6b7688;font-weight:400;">(${esc(it.labelAmostra)})</span>` : ''}</div>
+            <div style="color:#6b7688;font-size:10px;">coletado ${fmtDate(g.ultimaColeta.data)} — ${diasTxt}</div>
+            <div style="color:#6b7688;font-size:10px;">${g.ultimoLaudo ? `último laudo recebido em ${fmtDate(g.ultimoLaudo.data)}` : 'nenhum laudo recebido ainda'}</div>
+            ${infoExtra.length ? `<div style="color:#6b7688;font-size:10px;">${esc(infoExtra.join(' · '))}</div>` : ''}
+            <span class="link-editar-prazo-status" data-chave="${escA(it.chavePrazo)}" style="font-size:9.5px;color:#3b6fd6;text-decoration:underline;cursor:pointer;">${it.situacao === 'semprazo' ? 'definir prazo' : 'editar prazo'}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
+            <div style="background:${corTag.bg};color:${corTag.fg};font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:5px;letter-spacing:.02em;white-space:nowrap;">${esc(it.resultadoTxt.toUpperCase())}</div>
+            ${temAtencaoPrecoce ? `<div style="background:#f0c020;color:#332405;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:5px;white-space:nowrap;">ATENÇÃO PRECOCE</div>` : ''}
+          </div>
+        </div>
+        ${temAtencaoPrecoce ? `<div style="color:#8a6224;font-size:10px;margin-top:6px;">${esc(g.ultimoLaudo.notaAtencaoPrecoce || '')}</div>` : ''}
+      </div>`;
+    }).join('');
+  };
+  desenharLista();
+
+  resultEl.querySelector('.busca-status-amostra').addEventListener('input', (e) => {
+    statusAmostrasBusca = e.target.value;
+    desenharLista(); // redesenha só a lista, para o campo de busca não perder o foco
+  });
+  resultEl.querySelectorAll('.btn-filtro-status-amostra').forEach(btn => {
+    btn.addEventListener('click', () => {
+      statusAmostrasFiltro = btn.dataset.filtro;
+      resultEl.querySelectorAll('.btn-filtro-status-amostra').forEach(b => {
+        const ativo = b.dataset.filtro === statusAmostrasFiltro;
+        b.style.background = ativo ? '#1a2332' : '#fff';
+        b.style.color = ativo ? '#fff' : '#1a2332';
+        b.style.borderColor = ativo ? '#1a2332' : '#c3cad6';
+      });
+      desenharLista();
+    });
+  });
 }
 document.getElementById('btn-consultar-diario').addEventListener('click', () => {
   const nomeBusca = document.getElementById('h-consulta-equip').value.trim();
@@ -3681,7 +3957,7 @@ function renderDashRanking(modo){
       (manutencoesDiarias[eq.id] || []).forEach(m => {
         if(inicio && fim && (m.data < inicio || m.data > fim)) return;
         if(m.tipo === 'Corretiva') count++;
-        if(m.tipo === 'CBM' && (m.resultado === 'Alerta' || m.resultado === 'Crítico')) count++;
+        if(m.tipo === 'CBM' && (resultadoAnormal(m.resultado))) count++;
       });
       if(count > 0) contagem[eq.id] = { nome: eq.nome, count };
     });
@@ -3699,7 +3975,7 @@ function renderDashRanking(modo){
     });
   }
   const lista = Object.values(contagem).sort((a,b) => b.count - a.count).slice(0, 10);
-  const titulo = modo === 'equipamento' ? '🔧 Por equipamento — Corretivas + CBM Alerta/Crítico' : '⚙ Por peça — vezes registrada (ID Fluig)';
+  const titulo = modo === 'equipamento' ? '🔧 Por equipamento — Corretivas + CBM Cuidado/Alerta' : '⚙ Por peça — vezes registrada (ID Fluig)';
   if(lista.length === 0){
     c.innerHTML = `<div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:12px;">${titulo}</div><p class="empty-hint">Nenhuma ocorrência no período escolhido.</p>`;
     return;
