@@ -2076,8 +2076,9 @@ Responda SOMENTE com um JSON válido, sem markdown, sem texto antes ou depois, e
       "resultadoLaboratorio": "Normal" | "Cuidado" | "Alerta",
       "valoresExtraidos": { "<nome do parâmetro>": <valor>, ... },
       "resumoAchados": "<resumo curto, 1 frase em português, baseado no bloco Comments>",
+      "tendencia": "piorando" | "melhorando" | "estavel",
       "tendenciaPreocupante": true | false,
-      "resumoTendencia": "<se tendenciaPreocupante for true, explique a tendência em 1 frase; senão, string vazia>"
+      "resumoTendencia": "<se a tendência for piorando ou melhorando, explique em 1 frase em português citando o parâmetro e os valores (ex: ferro caiu de 27 para 19 ppm); se for estavel, string vazia>"
     }
   ]
 }
@@ -2087,7 +2088,8 @@ Regras:
 - IGNORE as células pintadas de amarelo ou vermelho dentro das tabelas para definir o status: elas marcam valores de amostras antigas (colunas anteriores) ou parâmetros isolados. Um laudo com faixa CAUTION continua "Cuidado" mesmo que tenha células vermelhas; um laudo com faixa NORMAL continua "Normal" mesmo que tenha células coloridas.
 - Use sempre a amostra MAIS RECENTE, que é a ÚLTIMA coluna (mais à direita) de cada tabela.
 - Em "valoresExtraidos" coloque no máximo 8 parâmetros principais da última coluna (viscosidade, oxidação, água, TBN, ferro, cobre, estanho, código ISO), com os números como impressos.
-- "tendenciaPreocupante" só deve ser true se a última amostra mostrar piora clara em relação às colunas anteriores ou ao histórico abaixo.
+- "tendencia" compara a ÚLTIMA coluna com as colunas anteriores (e com o histórico abaixo), olhando principalmente os parâmetros citados no bloco Comments e os metais de desgaste: "piorando" se houver piora clara (valores subindo em direção ao limite ou se afastando do normal); "melhorando" se houver melhora clara (valores voltando em direção ao normal); "estavel" nos demais casos, inclusive quando a variação for pequena ou sem direção definida.
+- "tendenciaPreocupante" deve ser true somente quando "tendencia" for "piorando".
 - Seja conciso e não use aspas duplas dentro dos textos.
 
 Lista de equipamentos possíveis (use exatamente um desses nomes em "equipamentoIdentificado"):
@@ -2145,6 +2147,11 @@ ${JSON.stringify(historico)}`;
     l.subItemIdentificado = null;
     // o status impresso pelo laboratório manda: CAUTION = Cuidado (amarelo), ALERT = Alerta (vermelho)
     l.resultadoLaboratorio = normalizarResultadoLaudo(l.statusLaudo || l.resultadoLaboratorio);
+    // tendência: piorando | melhorando | estavel
+    const tend = String(l.tendencia || '').toLowerCase();
+    l.tendencia = /pior/.test(tend) ? 'piorando' : (/melhor/.test(tend) ? 'melhorando' : (tend ? 'estavel' : (l.tendenciaPreocupante ? 'piorando' : 'estavel')));
+    l.tendenciaPreocupante = l.tendencia === 'piorando';
+    if(l.tendencia === 'estavel') l.resumoTendencia = '';
   });
   return { laudos, cortado };
 }
@@ -2211,10 +2218,12 @@ function renderResultadoLaudos(){
       <div style="font-size:10px;color:var(--text-faint);margin-bottom:4px;">${esc(r.arquivo)}${r.dataAmostra ? ' · amostra de ' + esc(r.dataAmostra) : ''}</div>
       ${linhaLaudo(r)}
       <div style="font-size:10.5px;color:var(--text-dim);margin-bottom:4px;">${esc(r.resumoAchados || '')}</div>
-      ${r.tendenciaPreocupante ? `<div style="background:var(--amber-dim);border-left:3px solid var(--amber);border-radius:0 6px 6px 0;padding:6px 9px;margin-top:4px;">
+      ${r.tendenciaPreocupante && !resultadoAnormal(r.resultadoLaboratorio) ? `<div style="background:var(--amber-dim);border-left:3px solid var(--amber);border-radius:0 6px 6px 0;padding:6px 9px;margin-top:4px;">
         <div style="color:var(--amber);font-size:10px;font-weight:600;">⚠ Atenção precoce</div>
         <div style="color:var(--amber);font-size:9.5px;">${esc(r.resumoTendencia || '')}</div>
       </div>` : ''}
+      ${r.tendenciaPreocupante && resultadoAnormal(r.resultadoLaboratorio) && r.resumoTendencia ? `<div style="color:var(--amber);font-size:10px;margin-top:4px;">↗ Piorando: ${esc(r.resumoTendencia)}</div>` : ''}
+      ${r.tendencia === 'melhorando' && resultadoAnormal(r.resultadoLaboratorio) && r.resumoTendencia ? `<div style="color:var(--green);font-size:10px;margin-top:4px;">↘ Melhorando: ${esc(r.resumoTendencia)}</div>` : ''}
       ${seletorEquip(r, idx)}
     </div>`;
   }).join('') + (temAlgumValido ? `<button class="save-btn" id="btn-confirmar-laudos" type="button" style="margin-top:8px;">Confirmar e criar registros de CBM</button>` : '');
@@ -2246,7 +2255,8 @@ async function confirmarLaudosProcessados(){
     const resultado = r.resultadoLaboratorio || 'Normal';
     const precisaDescricao = resultadoAnormal(resultado);
     let descricaoFinal = precisaDescricao ? (r.resumoAchados || 'Ver laudo') : 'Amostra coletada';
-    if(r.tendenciaPreocupante && r.resumoTendencia) descricaoFinal += ` (Atenção: ${r.resumoTendencia})`;
+    if(r.tendenciaPreocupante && r.resumoTendencia) descricaoFinal += resultadoAnormal(resultado) ? ` (Piorando: ${r.resumoTendencia})` : ` (Atenção: ${r.resumoTendencia})`;
+    else if(r.tendencia === 'melhorando' && r.resumoTendencia && resultadoAnormal(resultado)) descricaoFinal += ` (Melhorando: ${r.resumoTendencia})`;
     if(!manutencoesDiarias[info.equipId]) manutencoesDiarias[info.equipId] = [];
     const dataAmostra = /^\d{4}-\d{2}-\d{2}$/.test(String(r.dataAmostra || '')) ? r.dataAmostra : null;
     const repetidos = manutencoesDiarias[info.equipId].filter(m => m.tipo === 'CBM' && m.origemLaudo && (m.subItem || null) === (info.subItem || null)
@@ -2260,12 +2270,12 @@ async function confirmarLaudosProcessados(){
     manutencoesDiarias[info.equipId].push({
       id: uid(), data: hojeStr, dataAmostra, descricao: descricaoFinal, subItem: info.subItem, horimetro: '', tipo: 'CBM',
       corrigido: null, idFluig: '', statusEquip: null, resultado, subTipoColeta: 'oleo',
-      atencaoPrecoce: !!r.tendenciaPreocupante, notaAtencaoPrecoce: r.resumoTendencia || '', origemLaudo: true
+      atencaoPrecoce: !!r.tendenciaPreocupante, notaAtencaoPrecoce: r.resumoTendencia || '', tendencia: r.tendencia || 'estavel', origemLaudo: true
     });
     const chaveHist = chaveAmostraMapa(info.equipId, info.subItem);
     if(!laudosHistorico[chaveHist]) laudosHistorico[chaveHist] = [];
     laudosHistorico[chaveHist] = laudosHistorico[chaveHist].filter(h => !ehMesmaAmostra(h, dataAmostra));
-    laudosHistorico[chaveHist].push({ data: hojeStr, dataAmostra, valores: r.valoresExtraidos || {}, resultado, atencaoPrecoce: !!r.tendenciaPreocupante, notaTendencia: r.resumoTendencia || '' });
+    laudosHistorico[chaveHist].push({ data: hojeStr, dataAmostra, valores: r.valoresExtraidos || {}, resultado, atencaoPrecoce: !!r.tendenciaPreocupante, tendencia: r.tendencia || 'estavel', notaTendencia: r.resumoTendencia || '' });
     salvos++;
   }
   await salvarManutencoesDiarias();
@@ -3589,7 +3599,10 @@ function renderStatusAmostras(idDestino){
   // Resultado do laudo de cada item (o 'Crítico' antigo conta como Alerta)
   itens.forEach(it => {
     it.grupoResultado = it.resultadoTxt === 'Cuidado' ? 'Cuidado' : ((it.resultadoTxt === 'Alerta' || it.resultadoTxt === 'Crítico') ? 'Alerta' : 'Normal');
-    it.precoce = !!(it.g.ultimoLaudo && it.g.ultimoLaudo.atencaoPrecoce);
+    const piorando = !!(it.g.ultimoLaudo && it.g.ultimoLaudo.atencaoPrecoce);
+    it.precoce = piorando && it.grupoResultado === 'Normal';   // etiqueta só quando o laudo ainda diz Normal
+    it.melhorandoForaDoNormal = !!(it.g.ultimoLaudo && it.g.ultimoLaudo.tendencia === 'melhorando') && it.grupoResultado !== 'Normal'; // "Melhorando" só interessa em Cuidado e Alerta
+    it.piorandoForaDoNormal = piorando && it.grupoResultado !== 'Normal'; // em Cuidado e Alerta mostra só a frase da tendência, sem etiqueta
   });
   const contRes = { Normal: 0, Cuidado: 0, Alerta: 0, precoce: 0 };
   itens.forEach(it => { contRes[it.grupoResultado]++; if(it.precoce) contRes.precoce++; });
@@ -3640,7 +3653,7 @@ function renderStatusAmostras(idDestino){
       const g = it.g;
       const icone = g.subTipo === 'vibracao' ? '📳' : '🛢';
       const corTag = corResultadoAmostra(it.resultadoTxt);
-      const temAtencaoPrecoce = !!(g.ultimoLaudo && g.ultimoLaudo.atencaoPrecoce);
+      const temAtencaoPrecoce = it.precoce;
       const infoExtra = [];
       if(it.oleoLabel) infoExtra.push(`óleo: ${it.oleoLabel}`);
       if(g.ultimaColeta.horimetro) infoExtra.push(`horímetro: ${g.ultimaColeta.horimetro}h`);
@@ -3670,6 +3683,8 @@ function renderStatusAmostras(idDestino){
           </div>
         </div>
         ${temAtencaoPrecoce ? `<div style="color:#8a6224;font-size:10px;margin-top:6px;">${esc(g.ultimoLaudo.notaAtencaoPrecoce || '')}</div>` : ''}
+        ${it.piorandoForaDoNormal && g.ultimoLaudo.notaAtencaoPrecoce ? `<div style="color:#8a6224;font-size:10px;margin-top:6px;">↗ Piorando: ${esc(g.ultimoLaudo.notaAtencaoPrecoce)}</div>` : ''}
+        ${it.melhorandoForaDoNormal && g.ultimoLaudo.notaAtencaoPrecoce ? `<div style="color:#1e7a46;font-size:10px;margin-top:6px;">↘ Melhorando: ${esc(g.ultimoLaudo.notaAtencaoPrecoce)}</div>` : ''}
       </div>`;
     }).join('');
   };
