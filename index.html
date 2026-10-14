@@ -6628,7 +6628,8 @@ function manutDoDia(dRef){
       const eq = (typeof EQUIP_ITEM_MAP !== "undefined" && EQUIP_ITEM_MAP[eid]) ? EQUIP_ITEM_MAP[eid].nome : eid;
       const extra = `${m.horimetro && String(m.horimetro).trim() ? ", horímetro " + escH(String(m.horimetro).trim()) + " h" : ""}${m.idFluig && String(m.idFluig).trim() ? ", Fluig " + escH(String(m.idFluig).trim()) : ""}`;
       /* frase do bandalho: "Manutenção Preventiva 1000h: ME#1" */
-      const frase = `Manutenção ${escH(m.tipo || "")}${m.descricao && String(m.descricao).trim() ? " " + escH(String(m.descricao).trim()) : ""}`.replace(/\s+/g, " ").trim() + `: ${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}${extra}${m.tipo === "Corretiva" ? (m.corrigido === true ? ", corrigido" : ", não corrigido") + (m.statusEquip === "nao_operacional" ? ", equipamento não operacional" : "") : ""}`;
+      const descM = m.descricao && String(m.descricao).trim() && String(m.descricao).trim() !== "Outros" ? String(m.descricao).trim() : "";
+      const frase = `Manutenção ${escH(m.tipo || "")}${descM ? " " + escH(descM) : ""}`.replace(/\s+/g, " ").trim() + `: ${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}${extra}${m.tipo === "Corretiva" ? (m.corrigido === true ? ", corrigido" : ", não corrigido") + (m.statusEquip === "nao_operacional" ? ", equipamento não operacional" : "") : ""}`;
       man.push({ ref: m, serv: false, quarto: m.quarto || "", frase, txt: `<b>${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}</b> (${escH(m.tipo || "Manutenção")})${m.descricao ? ": " + escH(m.descricao) : ""}${m.horimetro && String(m.horimetro).trim() ? ", horímetro " + escH(String(m.horimetro).trim()) + " h" : ""}${m.idFluig && String(m.idFluig).trim() ? ", Fluig " + escH(String(m.idFluig).trim()) : ""}` });
     }));
     (servicosDiarios || []).forEach(sv => {
@@ -6636,7 +6637,9 @@ function manutDoDia(dRef){
       const eq = sv.itemId && typeof EQUIP_ITEM_MAP !== "undefined" && EQUIP_ITEM_MAP[sv.itemId] ? EQUIP_ITEM_MAP[sv.itemId].nome : "";
       const frase = sv.litros
         ? `Suplementação de óleo lubrificante: ${escH(eq)}, ${escH(String(sv.litros))} L${sv.texto && sv.texto !== "Óleo lubrificante" ? ", " + escH(sv.texto) : ""}`
-        : `${escH(sv.tipo || "Serviço geral")}${sv.texto && eq ? " " + escH(sv.texto) : ""}: ${eq ? escH(eq) : escH(sv.texto || "")}`;
+        : sv.tipo === "Outros"   /* "Outros": no bandalho sai só o que foi escrito, sem a palavra "Outros" */
+          ? (eq ? `${escH(sv.texto || "")}: ${escH(eq)}` : escH(sv.texto || ""))
+          : `${escH(sv.tipo || "Serviço geral")}${sv.texto && eq ? " " + escH(sv.texto) : ""}: ${eq ? escH(eq) : escH(sv.texto || "")}`;
       man.push({ ref: sv, serv: true, quarto: sv.quarto || "", frase, txt: `<b>${eq ? escH(eq) : "Serviço geral"}</b> (${escH(sv.tipo || "Serviço geral")})${sv.texto ? ": " + escH(sv.texto) : ""}` });
     });
   } catch (e) { console.error("Bandalho: erro ao ler manutenções", e); }
