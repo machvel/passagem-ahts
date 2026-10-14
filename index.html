@@ -3128,6 +3128,16 @@ async function salvarLeiturasOleo(){
   catch(e){ console.error('Erro ao salvar leituras de óleo:', e); return false; }
 }
 
+/* "Excluir registro" dentro de uma edição: apaga o registro de verdade (pede confirmação) e tira a linha do formulário */
+function ligarExcluirRegistro(row, item, i){
+  const b = row.querySelector('.btn-excluir-registro'); if(!b) return;
+  b.addEventListener('click', async () => {
+    const ok = item.editandoServicoId ? await excluirServicoGeral(item.editandoServicoId) : await excluirManutencao(item.editandoEquipId, item.editandoId);
+    if(!ok) return;
+    const k = manutencaoRascunho.indexOf(item); if(k >= 0) manutencaoRascunho.splice(k, 1);
+    renderManutencaoDraft();
+  });
+}
 function renderManutencaoDraft(){
   const c = document.getElementById('lista-manutencao-draft');
   c.innerHTML = '';
@@ -3136,7 +3146,7 @@ function renderManutencaoDraft(){
     row.className = 'list-item';
     if(item.cbmFixo){
       const eq = EQUIP_ITEM_MAP[item.itemId], orig = (manutencoesDiarias[item.editandoEquipId] || []).find(m => m.id === item.editandoId) || {};
-      row.innerHTML = `<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando análise existente</div>
+      row.innerHTML = `<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando análise existente<button type="button" class="btn-excluir-registro" style="float:right;appearance:none;background:none;border:1px solid #c0392b;color:#e0645a;border-radius:6px;font:inherit;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer;">Excluir registro</button></div>
         <div style="flex:1 1 100%;font-size:13px;"><b>${esc(eq ? eq.nome : item.itemId)}${item.subItens[0] ? ' — ' + esc(item.subItens[0]) : ''}</b>
           <span style="color:var(--text-faint);"> · CBM ${item.subTipoColeta === 'vibracao' ? 'vibração' : 'óleo'}${orig.dataAmostra ? ' · amostra de ' + fmtDate(orig.dataAmostra) : ''}</span></div>
         <select class="sel-resultado-cbm" style="flex:0 0 150px;">
@@ -3149,6 +3159,7 @@ function renderManutencaoDraft(){
       row.querySelector('.sel-resultado-cbm').addEventListener('change', e => { item.resultado = e.target.value; });
       row.querySelector('.campo-detalhe').addEventListener('input', e => { item.descricao = e.target.value; });
       row.querySelector('.remove-btn').addEventListener('click', () => { manutencaoRascunho.splice(i, 1); renderManutencaoDraft(); });
+      ligarExcluirRegistro(row, item, i);
       c.appendChild(row);
       return;
     }
@@ -3332,8 +3343,8 @@ function renderManutencaoDraft(){
     const horimetroHtml = ehServicoGeral ? '' : `<input type="text" class="inp-horimetro" placeholder="Horímetro (opcional)" value="${escA(item.horimetro)}" style="flex:0 0 130px;">`;
 
     row.innerHTML = `
-      ${item.editandoId ? '<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando manutenção existente</div>' : ''}
-      ${item.editandoServicoId ? '<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando serviço geral existente</div>' : ''}
+      ${item.editandoId ? '<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando manutenção existente<button type="button" class="btn-excluir-registro" style="float:right;appearance:none;background:none;border:1px solid #c0392b;color:#e0645a;border-radius:6px;font:inherit;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer;">Excluir registro</button></div>' : ''}
+      ${item.editandoServicoId ? '<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando serviço geral existente<button type="button" class="btn-excluir-registro" style="float:right;appearance:none;background:none;border:1px solid #c0392b;color:#e0645a;border-radius:6px;font:inherit;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer;">Excluir registro</button></div>' : ''}
       <select class="sel-tipo" style="flex:0 0 140px;">
         <option value="Preventiva" ${item.tipo==='Preventiva'?'selected':''}>Preventiva</option>
         <option value="Corretiva" ${item.tipo==='Corretiva'?'selected':''}>Corretiva</option>
@@ -3555,6 +3566,7 @@ function renderManutencaoDraft(){
       renderManutencaoDraft();
       if(eraEdicao) showToast('Edição cancelada — o registro continua como estava');
     });
+    ligarExcluirRegistro(row, item, i);
     c.appendChild(row);
   });
   const temAmostraOleo = manutencaoRascunho.some(item => item.tipo === 'CBM' && item.subTipoColeta === 'oleo');
@@ -4705,9 +4717,11 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       ${r.mostrarMarcar ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
       ${r.mostrarResolverCbm ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
       <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
+      <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;color:#c0392b;border-color:#c0392b;">Excluir</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
-    ${r.ehServicoGeral ? `<button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
+    ${r.ehServicoGeral ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
+      <button type="button" class="add-btn" data-excluir-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;color:#c0392b;border-color:#c0392b;">Excluir</button></div>` : ''}
   </div>`).join('') + `</div>`;
 });
 
@@ -5184,6 +5198,10 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
   }
   const btnEditar = e.target.closest('[data-editar-manut]');
   if(btnEditar){ editarManutencao(btnEditar.dataset.equip, btnEditar.dataset.rec); return; }
+  const btnExcluirManut = e.target.closest('[data-excluir-manut]');
+  if(btnExcluirManut){ await excluirManutencao(btnExcluirManut.dataset.equip, btnExcluirManut.dataset.rec); return; }
+  const btnExcluirServ = e.target.closest('[data-excluir-servico]');
+  if(btnExcluirServ){ await excluirServicoGeral(btnExcluirServ.dataset.servico); return; }
   const btnEditarLeitura = e.target.closest('[data-editar-leitura]');
   if(btnEditarLeitura){ editarLeitura(btnEditarLeitura.dataset.data); return; }
   const btnEditarServico = e.target.closest('[data-editar-servico]');
