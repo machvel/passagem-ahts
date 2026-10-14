@@ -455,7 +455,13 @@
   /* ===================== TELA LARGA (computador) ===================== */
   @media screen and (min-width:1000px){
     body{max-width:none;padding:20px 32px 60px;}
-    #tab-diario,#tab-novo,#tab-ferramentas{column-count:2;column-gap:20px;}
+    #tab-novo,#tab-ferramentas{column-count:2;column-gap:20px;}
+    /* Manutenção: "Registrar manutenção" fica sempre na coluna da direita; o resto à esquerda */
+    #tab-diario{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 20px;align-items:start;}
+    #tab-diario:not([style*="none"]){display:grid !important;}   /* a troca de aba põe display:block; aqui vira grade */
+    #tab-diario > *{grid-column:1;min-width:0;}
+    #tab-diario > .painel-registrar{grid-column:2;grid-row:1 / span 30;margin-top:0 !important;position:sticky;top:62px;max-height:calc(100vh - 76px);overflow:auto;}
+    #tab-diario > .panel:first-child{margin-top:0;}
     #tab-diario > *,#tab-novo > *,#tab-ferramentas > *{break-inside:avoid;}
     #tab-novo > #secoes-container{break-inside:auto;}
     #secoes-container > *{break-inside:avoid;}
@@ -489,7 +495,7 @@
     .o-toast{left:auto;right:24px;bottom:24px;border:2px solid #FFD400;border-radius:8px;max-width:520px;}
   }
   @media screen and (min-width:1700px){
-    #tab-diario,#tab-novo,#tab-ferramentas{column-count:3;}
+    #tab-novo,#tab-ferramentas{column-count:3;}
   }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
@@ -608,7 +614,7 @@
     </div>
   </div>
 
-  <div class="panel" style="margin-top:12px;">
+  <div class="panel painel-registrar" style="margin-top:12px;">
     <div class="section-title" style="margin-bottom:10px;">Registrar manutenção / serviço</div>
     <p class="empty-hint" style="padding:0 0 10px;">Registre a qualquer dia, sem precisar preencher horímetro junto. Escolha o tipo — se for Preventiva ou Corretiva, busque o equipamento pelo nome; se for Serviço Geral, não precisa escolher equipamento.</p>
     <datalist id="dl-equip"></datalist>
@@ -3128,6 +3134,24 @@ function renderManutencaoDraft(){
   manutencaoRascunho.forEach((item, i) => {
     const row = document.createElement('div');
     row.className = 'list-item';
+    if(item.cbmFixo){
+      const eq = EQUIP_ITEM_MAP[item.itemId], orig = (manutencoesDiarias[item.editandoEquipId] || []).find(m => m.id === item.editandoId) || {};
+      row.innerHTML = `<div style="flex:1 1 100%;font-size:10.5px;color:var(--accent);font-weight:600;">✎ Editando análise existente</div>
+        <div style="flex:1 1 100%;font-size:13px;"><b>${esc(eq ? eq.nome : item.itemId)}${item.subItens[0] ? ' — ' + esc(item.subItens[0]) : ''}</b>
+          <span style="color:var(--text-faint);"> · CBM ${item.subTipoColeta === 'vibracao' ? 'vibração' : 'óleo'}${orig.dataAmostra ? ' · amostra de ' + fmtDate(orig.dataAmostra) : ''}</span></div>
+        <select class="sel-resultado-cbm" style="flex:0 0 150px;">
+          <option value="Normal" ${!resultadoAnormal(item.resultado) ? 'selected' : ''}>Normal</option>
+          <option value="Cuidado" ${item.resultado === 'Cuidado' ? 'selected' : ''}>Cuidado (caution)</option>
+          <option value="Alerta" ${item.resultado === 'Alerta' || item.resultado === 'Crítico' ? 'selected' : ''}>Alerta (alert)</option>
+        </select>
+        <input type="text" class="campo-detalhe" placeholder="Descreva o que foi encontrado / acrescente informações" value="${escA(item.descricao)}" style="flex:1 1 200px;">
+        <button class="remove-btn" type="button" aria-label="Cancelar esta edição">×</button>`;
+      row.querySelector('.sel-resultado-cbm').addEventListener('change', e => { item.resultado = e.target.value; });
+      row.querySelector('.campo-detalhe').addEventListener('input', e => { item.descricao = e.target.value; });
+      row.querySelector('.remove-btn').addEventListener('click', () => { manutencaoRascunho.splice(i, 1); renderManutencaoDraft(); });
+      c.appendChild(row);
+      return;
+    }
 
     const ehServicoGeral = item.tipo === 'Serviço Geral';
     const usaCBM = item.tipo === 'CBM';
@@ -3523,17 +3547,13 @@ function renderManutencaoDraft(){
     if(!ehServicoGeral && !usaMultiOleo){
       row.querySelector('.inp-horimetro').addEventListener('input', e => item.horimetro = e.target.value);
     }
-    row.querySelector('.remove-btn').addEventListener('click', async () => {
-      if(item.editandoId && item.editandoEquipId){
-        const excluiu = await excluirManutencao(item.editandoEquipId, item.editandoId);
-        if(!excluiu) return;
-      }
-      if(item.editandoServicoId){
-        const excluiu = await excluirServicoGeral(item.editandoServicoId);
-        if(!excluiu) return;
-      }
+    row.querySelector('.remove-btn').addEventListener('click', () => {
+      /* o × só tira a linha do formulário. Numa edição, cancela a edição e o registro fica como estava
+         (antes ele apagava o registro original). Para excluir de verdade: Histórico → Manutenção → Excluir. */
+      const eraEdicao = !!(item.editandoId || item.editandoServicoId);
       manutencaoRascunho.splice(i,1);
       renderManutencaoDraft();
+      if(eraEdicao) showToast('Edição cancelada — o registro continua como estava');
     });
     c.appendChild(row);
   });
@@ -4150,7 +4170,7 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
   const duplicados = [];
   const entradasVistas = [];
   manutencaoRascunho.forEach(item => {
-    if(item.tipo === 'Serviço Geral' || !item.itemId) return;
+    if(item.tipo === 'Serviço Geral' || !item.itemId || item.cbmFixo || item.editandoId) return;   /* edição não é registro novo */
     const equipSelecionado = EQUIP_ITEM_MAP[item.itemId];
     const usaSeletorPreventivoPrev = equipSelecionado && equipSelecionado.tipo === 'motor' && item.tipo === 'Preventiva';
     const subItensAlvo = SUBITENS_POR_EQUIP[item.itemId] ? (item.subItens || []) : [null];
@@ -4198,6 +4218,14 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       if(litros > 0){ novoServico.litros = String(litros).replace('.', ','); if(ajustarOleoDoDia(item.itemId, data, litros)) oleoAlterado = true; }
       servicosDiarios.push(novoServico);
       servicosSalvos++;
+      return;
+    }
+    if(item.cbmFixo){
+      const lista = manutencoesDiarias[item.editandoEquipId] || [], reg = lista.find(m => m.id === item.editandoId);
+      if(!reg) return;
+      reg.descricao = (item.descricao || '').trim() || reg.descricao;
+      reg.resultado = item.resultado || reg.resultado;
+      manutSalvas++;
       return;
     }
     if(item.tipo === 'CBM' && item.subTipoColeta === 'oleo'){
@@ -5237,6 +5265,22 @@ function editarLeitura(data){
 function editarManutencao(equipId, recId){
   const registro = (manutencoesDiarias[equipId] || []).find(m => m.id === recId);
   if(!registro) return;
+  /* o mesmo registro não entra duas vezes no formulário (senão gera duplicata ao salvar) */
+  if(manutencaoRascunho.some(r => r.editandoId === recId)){
+    document.querySelector('.tab[data-tab="diario"]').click(); renderManutencaoDraft();
+    showToast('Esse registro já está aberto para edição'); return;
+  }
+  if(registro.tipo === 'CBM'){
+    /* análise (óleo/vibração): equipamento e amostra ficam como estão; muda só o texto e o resultado */
+    manutencaoRascunho.push({ cbmFixo: true, itemId: equipId, tipo: 'CBM', descricao: registro.descricao || '', resultado: registro.resultado || 'Normal',
+      subTipoColeta: registro.subTipoColeta || 'oleo', subItens: registro.subItem ? [registro.subItem] : [], horimetro: registro.horimetro || '',
+      editandoId: registro.id, editandoEquipId: equipId });
+    document.getElementById('h-manutencao-data').value = registro.data;
+    document.querySelector('.tab[data-tab="diario"]').click();
+    renderManutencaoDraft();
+    showToast('Editando análise — altere o texto ou o resultado e clique em Salvar');
+    return;
+  }
   const equip = EQUIP_ITEM_MAP[equipId];
   const isMotorPreventiva = equip && equip.tipo === 'motor' && registro.tipo === 'Preventiva';
   manutencaoRascunho.push({
