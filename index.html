@@ -1035,6 +1035,19 @@ try{
 }catch(e){ console.error('Erro ao iniciar Firebase:', e); firebaseDisponivel = false; }
 
 function nuvemRef(){ return dbFirestore.collection('passagem_ahts').doc('dados'); }
+/* registros antigos de manutenção sem código: ganham um código calculado do conteúdo (igual em qualquer aparelho),
+   para Editar/Excluir funcionarem e a nuvem não duplicar o registro a cada gravação */
+function idFixoManut(eqId, m){
+  const t = [eqId, m.data, m.tipo, m.descricao, m.subItem, m.horimetro, m.idFluig].map(x => x == null ? '' : String(x)).join('|');
+  let h1 = 5381, h2 = 52711;
+  for(let i = 0; i < t.length; i++){ const c = t.charCodeAt(i); h1 = (h1 * 33) ^ c; h2 = (h2 * 33) ^ c; }
+  return 'old-' + (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
+}
+function darCodigoManut(mapa){
+  let n = 0;
+  Object.keys(mapa || {}).forEach(k => (mapa[k] || []).forEach(m => { if(m && !m.id){ m.id = idFixoManut(k, m); n++; } }));
+  return n;
+}
 
 /* ===================== ACESSO: cada pessoa entra com e-mail e senha =====================
    A lista de quem pode entrar fica na nuvem (passagem_ahts/acesso) e é mantida pelo administrador.
@@ -1378,6 +1391,7 @@ async function salvarNuvem(){
 
       if(snap.exists){
         const remoto = snap.data();
+        darCodigoManut(remoto.manutencoesDiarias);
 
         idsExcluidosFinal = {
           entries: Array.from(new Set([...(remoto.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
@@ -1462,6 +1476,7 @@ async function carregarNuvem(){
       return false;
     }
     const dados = snap.data();
+    darCodigoManut(dados.manutencoesDiarias);
     const idsExcluidosMesclado = {
       entries: Array.from(new Set([...(dados.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
       manutencoes: Array.from(new Set([...(dados.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])])),
@@ -4716,12 +4731,12 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
     ${r.ehManutencao ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       ${r.mostrarMarcar ? `<button type="button" class="add-btn" data-marcar-corrigido data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como corrigido</button>` : ''}
       ${r.mostrarResolverCbm ? `<button type="button" class="add-btn" data-marcar-resolvido-cbm data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Marcar como resolvido</button>` : ''}
-      <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
-      <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;color:#c0392b;border-color:#c0392b;">Excluir</button>
+      <button type="button" class="add-btn" data-editar-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;width:auto;flex:1 1 0;">Editar</button>
+      <button type="button" class="add-btn" data-excluir-manut data-equip="${escA(r.equipId)}" data-rec="${escA(r.recId)}" style="padding:6px 10px;font-size:11px;color:#c0392b;border-color:#c0392b;width:auto;flex:1 1 0;">Excluir</button>
     </div>` : ''}
     ${r.ehLeitura ? `<button type="button" class="add-btn" data-editar-leitura data-data="${escA(r.data)}" style="margin-top:8px;padding:6px 10px;font-size:11px;">Editar</button>` : ''}
-    ${r.ehServicoGeral ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;">Editar</button>
-      <button type="button" class="add-btn" data-excluir-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;color:#c0392b;border-color:#c0392b;">Excluir</button></div>` : ''}
+    ${r.ehServicoGeral ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><button type="button" class="add-btn" data-editar-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;width:auto;flex:1 1 0;">Editar</button>
+      <button type="button" class="add-btn" data-excluir-servico data-servico="${escA(r.servicoId)}" style="padding:6px 10px;font-size:11px;color:#c0392b;border-color:#c0392b;width:auto;flex:1 1 0;">Excluir</button></div>` : ''}
   </div>`).join('') + `</div>`;
 });
 
@@ -5224,10 +5239,10 @@ document.getElementById('resultado-consulta').addEventListener('click', async (e
 async function excluirManutencao(equipId, recId){
   const arr = manutencoesDiarias[equipId] || [];
   const registro = arr.find(m => m.id === recId);
-  if(!registro) return false;
+  if(!registro){ showToast('Não encontrei esse registro. Recarregue a página e tente de novo.'); return false; }
   const nomeEquip = EQUIP_ITEM_MAP[equipId] ? EQUIP_ITEM_MAP[equipId].nome : equipId;
   const descricaoRegistro = descricaoManut(registro);
-  if(!confirm(`Excluir esse registro de ${nomeEquip} (${fmtDate(registro.data)})?\n"${descricaoRegistro}"\n\nEssa ação não pode ser desfeita.`)) return false;
+  if(!confirm(`Excluir este registro de ${nomeEquip} (${fmtDate(registro.data)})?\n"${descricaoRegistro}"\n\nToque em OK para excluir. Depois de excluído, não dá para recuperar.`)) return false;
   manutencoesDiarias[equipId] = arr.filter(m => m.id !== recId);
   await salvarIdExcluido('manutencoes', recId);
   await salvarManutencoesDiarias();
@@ -5241,9 +5256,9 @@ async function excluirManutencao(equipId, recId){
 
 async function excluirServicoGeral(servicoId){
   const registro = servicosDiarios.find(s => s.id === servicoId);
-  if(!registro) return false;
+  if(!registro){ showToast('Não encontrei esse serviço. Recarregue a página e tente de novo.'); return false; }
   const nomeEquip = registro.itemId && EQUIP_ITEM_MAP[registro.itemId] ? ` (${EQUIP_ITEM_MAP[registro.itemId].nome})` : '';
-  if(!confirm(`Excluir esse serviço geral${nomeEquip} (${fmtDate(registro.data)})?\n"${registro.texto}"\n\nEssa ação não pode ser desfeita.`)) return false;
+  if(!confirm(`Excluir este serviço geral${nomeEquip} (${fmtDate(registro.data)})?\n"${registro.texto}"\n\nToque em OK para excluir. Depois de excluído, não dá para recuperar.`)) return false;
   servicosDiarios = servicosDiarios.filter(s => s.id !== servicoId);
   if(registro.litros && ajustarOleoDoDia(registro.itemId, registro.data, -numLitros(registro.litros))) await salvarLeiturasOleo();
   await salvarIdExcluido('servicos', servicoId);
@@ -5747,6 +5762,7 @@ async function loadEntries(){
   await carregarTipoOleoEquip();
   await carregarLaudosHistorico();
   await carregarNuvem();
+  if(darCodigoManut(manutencoesDiarias)) await salvarManutencoesDiarias();   /* registros antigos sem código: sem isso, Editar/Excluir não os encontram */
   if(migrarEDeduplicarServicos()) await salvarServicosDiarios();
   mergeReportsSync(PRELOADED_REPORTS);
   atualizarIndicadorTamanho();
