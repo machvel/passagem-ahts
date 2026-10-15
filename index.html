@@ -258,6 +258,14 @@
   .o-grid label{margin:0;min-width:0;}
   .o-lacre-ac{flex:none;margin:0 0 10px;}
   .o-grid.o-obs{grid-template-columns:1fr;margin-top:10px;}
+  .est-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .est-card{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;min-width:0;}
+  .est-tit{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);}
+  .est-val{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .est-val small{font-size:12px;font-weight:600;color:var(--text-dim);margin-left:3px;}
+  .est-det{font-size:11px;line-height:1.45;color:var(--text-faint);margin-top:4px;}
+  .est-card.neg .est-val{color:var(--red);}
+  #est-form[hidden]{display:none;}
   .o-grid textarea{width:100%;margin-top:4px;min-height:64px;}
   .o-grid input{width:100%;margin-top:4px;}
   .o-tk legend b{color:var(--accent);font-weight:700;text-transform:none;letter-spacing:0;}
@@ -696,6 +704,26 @@
       <label>Wash Water (m³)<input type="text" inputmode="decimal" id="o-cons-wash" autocomplete="off"></label>
       <label>Gray Water (m³)<input type="text" inputmode="decimal" id="o-cons-gray" autocomplete="off"></label>
     </div>
+  </div>
+
+  <div class="panel" style="margin-top:12px;">
+    <div class="section-title" style="margin-bottom:8px;">Estoque de bordo</div>
+    <p class="empty-hint" style="padding:0 0 8px;">Estoque no fim do dia escolhido. O consumo diário dá baixa sozinho e os recebimentos (operações deste quarto) somam.</p>
+    <div class="est-grid">
+      <div class="est-card" data-est="agua"><div class="est-tit">Água potável</div><div class="est-val">—</div><div class="est-det"></div></div>
+      <div class="est-card" data-est="diesel"><div class="est-tit">Óleo diesel</div><div class="est-val">—</div><div class="est-det"></div></div>
+    </div>
+    <button class="add-btn" id="est-ajustar" type="button" style="margin-top:10px;">Informar / ajustar estoque (sondagem)</button>
+    <div id="est-form" hidden style="margin-top:10px;background:var(--panel-2);border:1px solid var(--accent);border-radius:6px;padding:12px;">
+      <p class="empty-hint" style="padding:0 0 8px;">Estoque medido no <b>início</b> do dia <b id="est-form-dia"></b>. A partir dele, o app desconta o consumo e soma os recebimentos. Deixe em branco o que não quiser mudar.</p>
+      <div class="o-grid">
+        <label>Água potável (m³)<input type="text" inputmode="decimal" id="est-in-agua" autocomplete="off"></label>
+        <label>Óleo diesel (m³)<input type="text" inputmode="decimal" id="est-in-diesel" autocomplete="off"></label>
+      </div>
+      <div class="busca-botoes" style="margin-top:10px;"><button class="save-btn" id="est-salvar" type="button">Salvar estoque</button>
+      <button class="save-btn secondary" id="est-cancelar" type="button">Cancelar</button></div>
+    </div>
+    <p class="empty-hint" id="est-status" role="status" style="padding:8px 0 0;"></p>
   </div>
 
   <div class="panel" style="margin-top:12px;">
@@ -6588,11 +6616,11 @@ function renderOps(){
     sec.querySelectorAll("[data-ac]").forEach(b => b.addEventListener("click", () => { const y = window.scrollY;
       o.acao = b.dataset.ac; save(); renderOps(); renderPaper(); window.scrollTo(0, y);
       const de = document.querySelector(`.o-op[data-n="${o.n}"] [data-ac="${o.acao}"]`); if (de) de.focus({ preventScroll: true }); }));
-    sec.querySelectorAll("[data-f]").forEach(i => i.addEventListener("input", () => { o[i.dataset.f] = i.value; save(); renderPaper(); }));
+    sec.querySelectorAll("[data-f]").forEach(i => i.addEventListener("input", () => { o[i.dataset.f] = i.value; save(); renderPaper(); if (i.dataset.f === "vol") renderEstoque(); }));
     sec.querySelectorAll("[data-k]").forEach(i => i.addEventListener("input", () => { o[i.dataset.k][i.dataset.p] = i.value.trim(); mark(); save(); renderPaper(); }));
     sec.querySelector(".o-del").addEventListener("click", () => {
       if (!confirm("Apagar esta operação?")) return;
-      state.ops[qq] = state.ops[qq].filter(x => x.n !== o.n); save(); renderOps(); renderPaper(); });
+      state.ops[qq] = state.ops[qq].filter(x => x.n !== o.n); save(); renderOps(); renderPaper(); renderEstoque(); });
     sec.querySelectorAll(".o-gps").forEach(b => b.addEventListener("click", () => {
       const fs = b.closest(".o-pos"), i = fs.dataset.i, msg = fs.querySelector(".o-gmsg");
       const fail = () => { msg.textContent = "Não consegui a posição do aparelho. Digite a posição passada pela ponte."; };
@@ -6795,15 +6823,70 @@ function localCom(st){
 function camposDP(){ const st = state.sit[q], op = st.st === "operando";
   $("o-dp").hidden = !op; $("o-modo").value = st.modo || ""; $("o-edg").checked = !!st.edg; $("o-tq").checked = !!st.tq;
   document.querySelectorAll("#o-dp .o-dpx").forEach(l => { l.style.display = op && st.modo ? "flex" : "none"; }); }
+/* ---------- estoque de água e diesel ----------
+   Referência (sondagem) guardada na nuvem em passagem_ahts/estoque: { agua:{data,valor}, diesel:{data,valor} }.
+   Estoque no fim do dia D = valor medido no início do dia da referência + recebimentos − consumo diário, de ref.data até D. */
+const LS_EST = "ahts_estoque_ahts";
+let estoqueRef = (() => { try { return JSON.parse(localStorage.getItem(LS_EST) || "{}") || {}; } catch (e) { return {}; } })();
+const docEstoque = () => dbFirestore.collection("passagem_ahts").doc("estoque");
+const numE = v => { const n = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isNaN(n) ? 0 : n; };
+const fmtE = n => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+let estPedido = 0;
+async function carregarEstoqueRef(){
+  if (!nuvemOk()) return;
+  try { await window.acessoPronto; const sn = await docEstoque().get();
+    if (sn.exists) { const r = sn.data(); ["agua", "diesel"].forEach(k => { if (r[k] && (!estoqueRef[k] || (r[k].at || 0) >= (estoqueRef[k].at || 0))) estoqueRef[k] = r[k]; });
+      try { localStorage.setItem(LS_EST, JSON.stringify(estoqueRef)); } catch (e) {} }
+  } catch (e) { console.error("Estoque: erro ao ler da nuvem", e); }
+}
+async function renderEstoque(){
+  const meu = ++estPedido, ate = data;
+  const refs = ["agua", "diesel"].map(k => estoqueRef[k]).filter(r => r && r.data && r.data <= ate);
+  if (refs.length && nuvemOk()) { const ini = refs.map(r => r.data).sort()[0]; try { await buscaNuvem(ini, ate); } catch (e) {} }
+  if (meu !== estPedido) return;                                   /* trocou de dia no meio da conta */
+  dias[data] = state;
+  ["agua", "diesel"].forEach(k => {
+    const card = document.querySelector(`.est-card[data-est="${k}"]`), ref = estoqueRef[k];
+    if (!card) return;
+    if (!ref || !ref.data) { card.querySelector(".est-val").textContent = "—"; card.querySelector(".est-det").textContent = "Estoque ainda não informado."; card.classList.remove("neg"); return; }
+    if (ref.data > ate) { card.querySelector(".est-val").textContent = "—"; card.querySelector(".est-det").textContent = `Estoque informado a partir de ${fmtDate(ref.data)}.`; card.classList.remove("neg"); return; }
+    let rec = 0, cons = 0;
+    Object.keys(dias).forEach(d => { if (d < ref.data || d > ate) return;
+      const dia = d === data ? state : normal(dias[d]);
+      cons += numE((dia.cons || {})[k]);
+      ["a", "b"].forEach(qq => (dia.ops[qq] || []).forEach(o => { if (o.type === (k === "agua" ? "agua" : "receb")) rec += numE(o.vol); })); });
+    const total = numE(ref.valor) + rec - cons;
+    card.querySelector(".est-val").innerHTML = `${fmtE(total)}<small>m³</small>`;
+    card.querySelector(".est-det").textContent = `${fmtE(numE(ref.valor))} em ${fmtDate(ref.data)}` + (rec ? ` + ${fmtE(rec)} recebido` : "") + (cons ? ` − ${fmtE(cons)} consumido` : "");
+    card.classList.toggle("neg", total < 0);
+  });
+}
+$("est-ajustar").addEventListener("click", () => {
+  $("est-form-dia").textContent = fmtDate(data); $("est-in-agua").value = ""; $("est-in-diesel").value = "";
+  $("est-form").hidden = false; $("est-status").textContent = ""; $("est-in-agua").focus();
+});
+$("est-cancelar").addEventListener("click", () => { $("est-form").hidden = true; });
+$("est-salvar").addEventListener("click", async () => {
+  const novo = {}; let algum = false, ruim = false;
+  [["agua", "est-in-agua"], ["diesel", "est-in-diesel"]].forEach(([k, id]) => { const v = $(id).value.trim(); if (!v) return;
+    if (isNaN(parseFloat(v.replace(",", ".")))) { ruim = true; return; } novo[k] = { data, valor: v.replace(".", ","), at: Date.now() }; algum = true; });
+  if (ruim) { $("est-status").textContent = "Valor inválido: use só números (ex.: 120,5)."; return; }
+  if (!algum) { $("est-status").textContent = "Preencha pelo menos um dos valores."; return; }
+  Object.assign(estoqueRef, novo);
+  try { localStorage.setItem(LS_EST, JSON.stringify(estoqueRef)); } catch (e) {}
+  $("est-form").hidden = true; renderEstoque();
+  if (nuvemOk()) { try { await docEstoque().set(estoqueRef); $("est-status").textContent = "Estoque salvo."; } catch (e) { console.error(e); $("est-status").textContent = "Salvo neste aparelho; a nuvem não respondeu."; } }
+  else $("est-status").textContent = "Salvo neste aparelho.";
+});
 function render(){ $("o-sit").value = state.sit[q].st; $("o-local").value = state.sit[q].local; camposDP();
-  const cs = state.cons || {}; ["agua", "diesel", "wash", "gray"].forEach(k => { const el = $("o-cons-" + k); if (document.activeElement !== el) el.value = cs[k] || ""; }); renderState(); renderLog(); renderOps(); }
+  const cs = state.cons || {}; ["agua", "diesel", "wash", "gray"].forEach(k => { const el = $("o-cons-" + k); if (document.activeElement !== el) el.value = cs[k] || ""; }); renderState(); renderLog(); renderOps(); renderEstoque(); }
 $("o-sit").addEventListener("change", e => { state.sit[q].st = e.target.value; state.sitM[q] = true; save(); camposDP(); renderPaper(); });
 $("o-modo").addEventListener("change", e => { state.sit[q].modo = e.target.value; state.sitM[q] = true; save(); camposDP(); renderPaper(); });
 $("o-edg").addEventListener("change", e => { state.sit[q].edg = e.target.checked; save(); renderPaper(); });
 $("o-tq").addEventListener("change", e => { state.sit[q].tq = e.target.checked; save(); renderPaper(); });
 $("o-local").addEventListener("input", e => { state.sit[q].local = e.target.value; state.sitM[q] = true; save(); renderPaper(); });
 ["agua", "diesel", "wash", "gray"].forEach(k => $("o-cons-" + k).addEventListener("input", e => {
-  state.cons = Object.assign({ agua: "", diesel: "", wash: "", gray: "" }, state.cons); state.cons[k] = e.target.value.trim(); save(); renderPaper(); }));
+  state.cons = Object.assign({ agua: "", diesel: "", wash: "", gray: "" }, state.cons); state.cons[k] = e.target.value.trim(); save(); renderPaper(); if (k === "agua" || k === "diesel") renderEstoque(); }));
 
 /* ---------- controles ---------- */
 /* ---------- quarto novo herda sozinho o estado final do quarto anterior ---------- */
@@ -6873,7 +6956,7 @@ document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", (
   const eu = tab.dataset.tab === "operacao";
   $("tab-operacao").style.display = eu ? "block" : "none";
   if (!eu) { toast.hidden = true; return; }
-  if (!pronto) { pronto = true; irPara(data); } else { render(); autoHerdar(); }
+  if (!pronto) { pronto = true; irPara(data); carregarEstoqueRef().then(renderEstoque); } else { render(); autoHerdar(); }
 }));
 /* ---------- busca no bandalho (aba Histórico), só leitura ---------- */
 const semAcento = t => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
