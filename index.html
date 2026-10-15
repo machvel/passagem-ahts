@@ -1063,6 +1063,25 @@ try{
 }catch(e){ console.error('Erro ao iniciar Firebase:', e); firebaseDisponivel = false; }
 
 function nuvemRef(){ return dbFirestore.collection('passagem_ahts').doc('dados'); }
+/* notas técnicas: junta nota por nota (código da nota). Antes, a lista inteira de um equipamento (ou de "Outros")
+   de um aparelho substituía a do outro, e notas salvas em outro aparelho sumiam. */
+function mesclarNotas(remoto, local, excl){
+  const fora = new Set(excl || []), saida = {};
+  const ehLista = v => Array.isArray(v);
+  new Set([...Object.keys(remoto || {}), ...Object.keys(local || {})]).forEach(k => {
+    const r = (remoto || {})[k], l = (local || {})[k];
+    if(!ehLista(r) && !ehLista(l)){                      /* texto antigo ou configuração (__config): o deste aparelho vale, se existir */
+      const v = (l !== undefined && l !== '' && l !== null) ? l : r; if(v !== undefined) saida[k] = v; return;
+    }
+    const lr = ehLista(r) ? r : (typeof r === 'string' && r.trim() ? [{id: 'antiga-' + k, titulo: '', texto: r}] : []);
+    const ll = ehLista(l) ? l : (typeof l === 'string' && l.trim() ? [{id: 'antiga-' + k, titulo: '', texto: l}] : []);
+    const idsLocal = new Set(ll.map(n => n && n.id));
+    const lista = ll.filter(n => !(n && n.id && fora.has(k + '|' + n.id)));   /* apagada em outro aparelho */
+    lr.forEach(n => { if(n && n.id && !idsLocal.has(n.id) && !fora.has(k + '|' + n.id)) lista.push(n); });
+    saida[k] = lista;
+  });
+  return saida;
+}
 /* registros antigos de manutenção sem código: ganham um código calculado do conteúdo (igual em qualquer aparelho),
    para Editar/Excluir funcionarem e a nuvem não duplicar o registro a cada gravação */
 function idFixoManut(eqId, m){
@@ -1299,6 +1318,7 @@ function renderUsuarios(){
           st('Apagando as notas técnicas...');
           const porEq = {}; achado.notas.forEach(x => { (porEq[x.eq] = porEq[x.eq] || new Set()).add(x.n.id); });
           Object.keys(porEq).forEach(eq => { notasEquipamento[eq] = notasDoEquip(eq).filter(n => !porEq[eq].has(n.id)); });
+          for(const eq of Object.keys(porEq)) for(const id of porEq[eq]) await salvarIdExcluido('notas', eq + '|' + id);
           await salvarNotasEquipamento();
         }
         st(`Pronto: ${total} lançamento(s) apagado(s). Recarregando...`);
@@ -1424,7 +1444,8 @@ async function salvarNuvem(){
         idsExcluidosFinal = {
           entries: Array.from(new Set([...(remoto.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
           manutencoes: Array.from(new Set([...(remoto.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])])),
-          servicos: Array.from(new Set([...(remoto.idsExcluidos?.servicos || []), ...(idsExcluidos.servicos || [])]))
+          servicos: Array.from(new Set([...(remoto.idsExcluidos?.servicos || []), ...(idsExcluidos.servicos || [])])),
+          notas: Array.from(new Set([...(remoto.idsExcluidos?.notas || []), ...(idsExcluidos.notas || [])]))
         };
 
         const entriesPorId = {};
@@ -1462,7 +1483,7 @@ async function salvarNuvem(){
         });
         servicosFinal = Object.values(servicosMesclado);
 
-        notasFinal = Object.assign({}, remoto.notasEquipamento || {}, notasEquipamento || {});
+        notasFinal = mesclarNotas(remoto.notasEquipamento, notasEquipamento, idsExcluidosFinal.notas);
         prazosFinal = Object.assign({}, remoto.prazosColeta || {}, prazosColeta || {});
         tipoOleoFinal = Object.assign({}, remoto.tipoOleoEquip || {}, tipoOleoEquip || {});
         laudosHistFinal = Object.assign({}, remoto.laudosHistorico || {}, laudosHistorico || {});
@@ -1508,7 +1529,8 @@ async function carregarNuvem(){
     const idsExcluidosMesclado = {
       entries: Array.from(new Set([...(dados.idsExcluidos?.entries || []), ...(idsExcluidos.entries || [])])),
       manutencoes: Array.from(new Set([...(dados.idsExcluidos?.manutencoes || []), ...(idsExcluidos.manutencoes || [])])),
-      servicos: Array.from(new Set([...(dados.idsExcluidos?.servicos || []), ...(idsExcluidos.servicos || [])]))
+      servicos: Array.from(new Set([...(dados.idsExcluidos?.servicos || []), ...(idsExcluidos.servicos || [])])),
+      notas: Array.from(new Set([...(dados.idsExcluidos?.notas || []), ...(idsExcluidos.notas || [])]))
     };
     idsExcluidos = idsExcluidosMesclado;
     if(dados.entries) entries = dados.entries.filter(e => !idsExcluidosMesclado.entries.includes(e.id));
@@ -1522,7 +1544,7 @@ async function carregarNuvem(){
       });
     }
     if(dados.servicosDiarios) servicosDiarios = dados.servicosDiarios.filter(s => !s.id || !idsExcluidosMesclado.servicos.includes(s.id));
-    if(dados.notasEquipamento) notasEquipamento = dados.notasEquipamento;
+    if(dados.notasEquipamento) notasEquipamento = mesclarNotas(dados.notasEquipamento, notasEquipamento, idsExcluidosMesclado.notas);
     if(dados.prazosColeta) prazosColeta = Object.assign({}, prazosColeta, dados.prazosColeta);
     if(dados.tipoOleoEquip) tipoOleoEquip = Object.assign({}, tipoOleoEquip, dados.tipoOleoEquip);
     if(dados.laudosHistorico) laudosHistorico = Object.assign({}, laudosHistorico, dados.laudosHistorico);
@@ -6113,7 +6135,8 @@ function notasDoEquip(id){
       const a = achados[+b.dataset.excluir];
       if(!confirm(`Excluir a nota técnica "${a.n.titulo || a.n.texto.slice(0, 40)}" (${a.nome})?\n\nEssa ação não pode ser desfeita.`)) return;
       const lista = notasDoEquip(a.id).filter(n => n.id !== a.n.id);
-      notasEquipamento[a.id] = lista;   /* lista vazia fica gravada, senão a nuvem devolve a nota apagada */
+      notasEquipamento[a.id] = lista;
+      await salvarIdExcluido('notas', a.id + '|' + a.n.id);   /* para a nuvem não devolver a nota apagada */
       await salvarNotasEquipamento(); showToast('Nota técnica excluída'); buscar();
     }));
   }
@@ -6151,6 +6174,8 @@ function notasDoEquip(id){
       const l = notasDoEquip(editando.equipId); antiga = l.find(n => n.id === editando.notaId) || null;
       const resto = l.filter(n => n.id !== editando.notaId);
       notasEquipamento[editando.equipId] = resto;
+      if(antiga && equip.id !== editando.equipId) await salvarIdExcluido('notas', editando.equipId + '|' + antiga.id);   /* nota mudou de equipamento */
+      if(antiga && /^antiga-/.test(antiga.id)) await salvarIdExcluido('notas', editando.equipId + '|' + antiga.id);   /* nota antiga (texto único) virou nota nova */
     }
     const id = antiga && !/^antiga-/.test(antiga.id) ? antiga.id : uid();
     const nota = {id, titulo, texto};
@@ -6830,7 +6855,7 @@ const LS_EST = "ahts_estoque_ahts";
 let estoqueRef = (() => { try { return JSON.parse(localStorage.getItem(LS_EST) || "{}") || {}; } catch (e) { return {}; } })();
 const docEstoque = () => dbFirestore.collection("passagem_ahts").doc("estoque");
 const numE = v => { const n = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isNaN(n) ? 0 : n; };
-const fmtE = n => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtE = n => n.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 let estPedido = 0;
 async function carregarEstoqueRef(){
   if (!nuvemOk()) return;
