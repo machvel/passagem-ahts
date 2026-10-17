@@ -1732,12 +1732,13 @@ async function gerarEtiquetasCompactas(lista){
   const outDoc = await PDFLib.PDFDocument.create();
   const font = await outDoc.embedFont(PDFLib.StandardFonts.Helvetica);
 
-  // Medidas exatas da folha de etiqueta adesiva A4 (Pimaco A4350 / Colacril): 10 etiquetas, 2 colunas x 5 linhas, 99,0 x 55,8mm cada
+  // Folha Pimaco 6183 (Carta, 215,9 x 279,4 mm): 10 etiquetas, 2 colunas x 5 linhas, 101,6 x 50,8 mm cada
+  // margem superior 12,7 mm, margem lateral 4,0 mm, 4,8 mm entre as colunas, linhas encostadas
   const mm = v => v * 2.834645669;
-  const PAGE_W = mm(210), PAGE_H = mm(297);
-  const LABEL_W = mm(99.0), LABEL_H = mm(55.8);
-  const MARGIN_L = mm(4.7), GAP_COL = mm(2.6);
-  const MARGIN_TOP = mm(9.0), GAP_ROW = mm(0);
+  const PAGE_W = mm(215.9), PAGE_H = mm(279.4);
+  const LABEL_W = mm(101.6), LABEL_H = mm(50.8);
+  const MARGIN_L = mm(3.97), GAP_COL = mm(4.76);
+  const MARGIN_TOP = mm(12.7), GAP_ROW = mm(0);
   const COLS = 2, ROWS = 5;
   const porPagina = COLS * ROWS;
 
@@ -1755,9 +1756,10 @@ async function gerarEtiquetasCompactas(lista){
     const origW = c.cellRight - c.cellLeft;
     const origH = c.cellTop - c.cellBottom;
     // escala uniforme ajustando pela largura (a dimensão mais restritiva), centralizando verticalmente dentro da etiqueta
-    const scale = LABEL_W / origW;
+    const scale = Math.min(LABEL_W / origW, LABEL_H / origH);   /* cabe inteira na etiqueta */
+    const padH = (LABEL_W - origW*scale) / 2;
     const padV = (LABEL_H - origH*scale) / 2;
-    const destX = slotX;
+    const destX = slotX + padH;
     const destY = slotY + padV;
 
     const srcPage = srcDoc.getPage(c.pagina - 1);
