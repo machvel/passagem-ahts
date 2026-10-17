@@ -3795,7 +3795,7 @@ function renderDiario(){
     if(it.tipo === 'motor'){
       const ultimaFuel = getUltimaLeituraFuel(it.id);
       const fuelNaData = (leiturasFuel[it.id]||[]).find(l => l.data === dataAtual);
-      html += `<div class="row" style="margin-top:5px;"><input type="text" data-fuel-id="${escA(it.id)}" value="${fuelNaData ? escA(fuelNaData.valor) : ''}" placeholder="${ultimaFuel ? escA(ultimaFuel.valor) : '—'}"><span class="unit">m³</span></div>`;
+      html += `<div class="row" style="margin-top:5px;"><input type="text" data-fuel-id="${escA(it.id)}" value="${fuelNaData ? escA(fuelNaData.valor) : ''}" placeholder="${ultimaFuel ? escA(ultimaFuel.valor) : '—'}"><span class="unit">L</span></div>`;
       const ultimaOleo = getUltimaLeituraOleo(it.id);
       const oleoNaData = (leiturasOleo[it.id]||[]).find(l => l.data === dataAtual);
       html += `<div class="row" style="margin-top:5px;"><input type="text" data-oleo-id="${escA(it.id)}" value="${oleoNaData ? escA(oleoNaData.valor) : ''}" placeholder="${ultimaOleo ? escA(ultimaOleo.valor) : '—'}"><span class="unit">L</span></div>`;
@@ -5074,13 +5074,28 @@ function calcularTotalEMedia(leituraSet, itemId, inicio, fim){
   const dias = Math.max(1, Math.round((new Date(arr[arr.length-1].data) - new Date(arr[0].data)) / 86400000));
   return { total, media: total/dias };
 }
+/* consumo de combustível e lubrificante só conta a partir desta data (antes dela as leituras têm erros de digitação) */
+const INICIO_CONSUMO = '2026-10-14';
+/* combustível: o contador é lançado em litros (13192210 L) e o app mostra em m³ (13.192,210 m³) */
+function fuelM3(v){
+  const t = String(v == null ? '' : v).trim();
+  if(!t) return NaN;
+  if(/[.,]/.test(t)) return parseFloat(t.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+  return parseFloat(t) / 1000;
+}
 function renderDashConsumo(leituraSet, unidade, titulo){
   const c = document.getElementById('dash-conteudo');
-  const { inicio, fim } = getPeriodoDash();
+  if(titulo === 'Combustível' && !(leituraSet && leituraSet.__m3)){   /* trabalha com uma cópia já convertida para m³ (uma vez só) */
+    const conv = {}; Object.defineProperty(conv, '__m3', { value: true });
+    Object.keys(leituraSet || {}).forEach(k => { conv[k] = (leituraSet[k] || []).map(l => ({ data: l.data, valor: String(fuelM3(l.valor)) })); });
+    leituraSet = conv;
+  }
+  let { inicio, fim } = getPeriodoDash();
+  if(!inicio || inicio < INICIO_CONSUMO) inicio = INICIO_CONSUMO;
   const icone = titulo === 'Combustível' ? '⛽' : '🛢';
   const grupoNome = dashGrupoConsumo === 'principais' ? 'Motores principais' : 'Diesel geradores';
   const itens = MOTORES_ITEMS.filter(it => dashGrupoConsumo === 'principais' ? it.id.startsWith('me') : it.id.startsWith('dg'));
-  const casasDecimais = titulo === 'Combustível' ? 1 : 0;
+  const casasDecimais = titulo === 'Combustível' ? 3 : 0;
 
   const totaisHtml = itens.map(it => {
     const t = calcularTotalEMedia(leituraSet, it.id, inicio, fim);
@@ -5111,15 +5126,15 @@ function renderDashConsumo(leituraSet, unidade, titulo){
       const h = calcularTotalEMedia(leituras, it.id, dIni, dFim);
       soma += total; comDado++;
       return `<tr><th scope="row">${esc(it.nome)}<span>${fmtDate(p.data).slice(0,5)} a ${fmtDate(u.data).slice(0,5)}</span></th>
-        <td><b>${fmt(total, comb ? 1 : 0)}</b></td><td>${fmt(total/dias, comb ? 2 : 1)}</td><td>${h && h.total > 0 ? fmt(h.total,0) : '—'}</td><td>${h && h.total > 0 ? (comb ? fmt(total*1000/h.total,0) : fmt(total/h.total*100,1)) : '—'}</td></tr>`;
+        <td><b>${fmt(total, comb ? 3 : 0)}</b></td><td>${fmt(total/dias, comb ? 3 : 1)}</td><td>${h && h.total > 0 ? fmt(h.total,0) : '—'}</td><td>${h && h.total > 0 ? (comb ? fmt(total*1000/h.total,0) : fmt(total/h.total*100,1)) : '—'}</td></tr>`;
     }).join('');
     consultaHtml = `<div class="dash-consulta">
       <div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:2px;">${icone} Consumo no período, ${grupoNome.toLowerCase()}</div>
-      <p class="empty-hint" style="padding:0 0 8px;">${inicio ? fmtDate(inicio) : 'início'} a ${fim ? fmtDate(fim) : 'hoje'}. ${diario ? 'Soma dos litros lançados no Registro diário (inclui as suplementações) de cada motor dentro do período.' : 'Diferença entre a primeira e a última leitura de cada motor dentro do período.'}</p>
+      <p class="empty-hint" style="padding:0 0 8px;">${inicio ? fmtDate(inicio) : 'início'} a ${fim ? fmtDate(fim) : 'hoje'}${inicio === INICIO_CONSUMO ? ' (o consumo é contado a partir de ' + fmtDate(INICIO_CONSUMO) + ')' : ''}. ${diario ? 'Soma dos litros lançados no Registro diário (inclui as suplementações) de cada motor dentro do período.' : 'Diferença entre a primeira e a última leitura de cada motor dentro do período.'}</p>
       <div style="overflow-x:auto;"><table>
         <thead><tr><th scope="col">Motor</th><th scope="col">Consumo (${unidade})</th><th scope="col">${unidade}/dia</th><th scope="col">Horas</th><th scope="col">${comb ? 'L/h' : 'L/100 h'}</th></tr></thead>
         <tbody>${linhas}</tbody>
-        <tfoot><tr><th scope="row">Total${comDado < itens.length ? `<span>${comDado} de ${itens.length} motores</span>` : ''}</th><td><b>${comDado ? fmt(soma, comb ? 1 : 0) : '—'}</b></td><td colspan="3"></td></tr></tfoot>
+        <tfoot><tr><th scope="row">Total${comDado < itens.length ? `<span>${comDado} de ${itens.length} motores</span>` : ''}</th><td><b>${comDado ? fmt(soma, comb ? 3 : 0) : '—'}</b></td><td colspan="3"></td></tr></tfoot>
       </table></div>
     </div>`;
   }
@@ -5160,7 +5175,7 @@ function renderDashConsumo(leituraSet, unidade, titulo){
   document.getElementById('dash-legenda-tempo').innerHTML = legendaTempoHtml;
 
   const pontosHorimetro = itens.map((it, i) => ({ nome: it.nome, cor: CORES_SERIE[i % CORES_SERIE.length], ponto: calcularPontoHorimetro(leituraSet, it.id, inicio, fim) }));
-  const legendaHorimetroHtml = pontosHorimetro.filter(p => p.ponto).map(p => `<span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:${p.cor};"></span>${esc(p.nome)} — ${(p.ponto.deltaLeitura/(p.ponto.horaFim-p.ponto.horaInicio)).toFixed(3)} ${unidade}/h</span>`).join('');
+  const legendaHorimetroHtml = pontosHorimetro.filter(p => p.ponto).map(p => `<span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:2px;background:${p.cor};"></span>${esc(p.nome)} — ${unidade === 'm³' ? (p.ponto.deltaLeitura*1000/(p.ponto.horaFim-p.ponto.horaInicio)).toLocaleString('pt-BR', {maximumFractionDigits: 0}) + ' L/h' : (p.ponto.deltaLeitura/(p.ponto.horaFim-p.ponto.horaInicio)).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + ' ' + unidade + '/h'}</span>`).join('');
   document.getElementById('dash-legenda-horimetro').innerHTML = legendaHorimetroHtml || '<span>Sem dados suficientes no período.</span>';
 
   if(typeof Chart === 'undefined'){
@@ -5180,7 +5195,7 @@ function renderDashConsumo(leituraSet, unidade, titulo){
       type: 'line',
       data: { datasets: dsTempo.map(s => ({ label: s.nome, borderColor: s.cor, backgroundColor: s.cor, borderWidth: 2, pointRadius: 3, tension: 0.2,
         data: s.serie.map(p => ({ x: p.data, y: Math.round(p.taxa * 1000) / 1000 })) })) },
-      options: optTempo({ type: 'time', time: { unit: 'month' } })
+      options: optTempo({ type: 'time', time: { tooltipFormat: 'dd/MM/yyyy', displayFormats: { day: 'dd/MM', month: 'MM/yyyy' } } })
     });
   }catch(e){
     console.warn('Gráfico no tempo sem adaptador de datas, usando eixo simples', e);
@@ -6844,7 +6859,9 @@ function renderPaper(){
     const out = itens.filter(it => it.tipo !== "motor").map(it => ({ nome: it.nome.replace(" — VFD", " VFD"), h: val(leituras, it.id) })).filter(x => x.h);
     /* uma tabela só: motores nas colunas e, embaixo, os demais horímetros alinhados nas mesmas colunas */
     const cols = mot.length ? mot.length + 1 : Math.min(out.length, 9);
-    const linha = (rot, k) => mot.some(m => m[k]) ? `<tr><th scope="row">${rot}</th>${mot.map(m => `<td>${escH(m[k])}</td>`).join("")}</tr>` : "";
+    /* combustível: lançado em litros (contador), mostrado em m³ */
+    const m3 = v => { const n = typeof fuelM3 === "function" ? fuelM3(v) : NaN; return isNaN(n) ? v : n.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }); };
+    const linha = (rot, k) => mot.some(m => m[k]) ? `<tr><th scope="row">${rot}</th>${mot.map(m => `<td>${escH(k === "f" && m[k] ? m3(m[k]) : m[k])}</td>`).join("")}</tr>` : "";
     let corpo = mot.length ? `<tr class="o-regh"><th></th>${mot.map(m => `<th scope="col">${escH(m.nome)}</th>`).join("")}</tr>${linha("Horímetro (h)", "h")}${linha("Combustível (m³)", "f")}${linha("Óleo lub. (L)", "o")}` : "";
     for (let i = 0; i < out.length; i += cols) { const g = out.slice(i, i + cols), falta = "<td></td>".repeat(cols - g.length);
       corpo += `<tr class="o-regh">${g.map(x => `<th scope="col">${escH(x.nome)}</th>`).join("")}${falta}</tr><tr>${g.map(x => `<td>${escH(x.h)} h</td>`).join("")}${falta}</tr>`; }
