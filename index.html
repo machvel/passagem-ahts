@@ -510,7 +510,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-date-fns/3.0.0/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
 <body>
@@ -5009,7 +5009,26 @@ function renderDashRanking(modo){
     </div>
   `;
 }
+/* óleo lubrificante é lançado em litros do dia (soma); combustível é leitura acumulada (lifetime: última − primeira) */
+const ehLancDiario = set => set === leiturasOleo;
+const numDash = v => parseFloat(String(v == null ? '' : v).replace(',', '.'));
+/* início real do período de um motor: a data escolhida ou, se o registro começou depois, a primeira leitura de horímetro */
+function inicioRegistro(itemId, inicio, fim, reserva){
+  const ds = (leituras[itemId] || []).map(l => l.data).filter(d => (!inicio || d >= inicio) && (!fim || d <= fim)).sort();
+  return ds[0] || inicio || reserva;
+}
 function calcularSeriesTaxa(leituraSet, itemId, inicio, fim){
+  if(ehLancDiario(leituraSet)){
+    const horas = {}; (leituras[itemId] || []).forEach(h => { horas[h.data] = numDash(h.valor); });
+    const pts = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim) && numDash(l.valor) > 0 && !isNaN(horas[l.data]) && horas[l.data] !== undefined)
+      .sort((a,b) => a.data.localeCompare(b.data));
+    const serie = [];
+    for(let i = 1; i < pts.length; i++){   /* litros desta suplementação ÷ horas rodadas desde a anterior */
+      const dH = horas[pts[i].data] - horas[pts[i-1].data];
+      if(dH > 0) serie.push({ data: pts[i].data, taxa: numDash(pts[i].valor) / dH });
+    }
+    return serie;
+  }
   const leiturasItem = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim));
   const horasItem = leituras[itemId] || [];
   const mapaHoras = {};
@@ -5029,8 +5048,8 @@ function calcularSeriesTaxa(leituraSet, itemId, inicio, fim){
 function calcularPontoHorimetro(leituraSet, itemId, inicio, fim){
   const arr = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim)).sort((a,b) => a.data.localeCompare(b.data));
   const horasArr = (leituras[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim)).sort((a,b) => a.data.localeCompare(b.data));
-  if(arr.length < 2 || horasArr.length < 2) return null;
-  const deltaLeitura = parseFloat(arr[arr.length-1].valor) - parseFloat(arr[0].valor);
+  if((ehLancDiario(leituraSet) ? !arr.length : arr.length < 2) || horasArr.length < 2) return null;
+  const deltaLeitura = ehLancDiario(leituraSet) ? arr.reduce((s, l) => s + (numDash(l.valor) || 0), 0) : parseFloat(arr[arr.length-1].valor) - parseFloat(arr[0].valor);
   const horaInicio = parseFloat(horasArr[0].valor);
   const horaFim = parseFloat(horasArr[horasArr.length-1].valor);
   if(isNaN(deltaLeitura) || isNaN(horaInicio) || isNaN(horaFim) || horaFim <= horaInicio || deltaLeitura < 0) return null;
@@ -5041,6 +5060,12 @@ let dashChartTempo = null, dashChartHorimetro = null;
 let dashGrupoConsumo = 'principais';
 function calcularTotalEMedia(leituraSet, itemId, inicio, fim){
   const arr = (leituraSet[itemId] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim)).sort((a,b) => a.data.localeCompare(b.data));
+  if(ehLancDiario(leituraSet)){
+    if(!arr.length) return null;
+    const total = arr.reduce((s, l) => s + (numDash(l.valor) || 0), 0);
+    const d1 = inicioRegistro(itemId, inicio, fim, arr[0].data), d2 = fim || new Date().toISOString().slice(0, 10);
+    return { total, media: total / Math.max(1, Math.round((new Date(d2) - new Date(d1)) / 86400000)) };
+  }
   if(arr.length < 2) return null;
   const v1 = parseFloat((arr[0].valor+'').replace(',','.'));
   const v2 = parseFloat((arr[arr.length-1].valor+'').replace(',','.'));
@@ -5070,23 +5095,27 @@ function renderDashConsumo(leituraSet, unidade, titulo){
   /* consulta de consumo no período: todos os motores numa tabela, com total */
   let consultaHtml = '';
   {
-    const comb = titulo === 'Combustível';
+    const comb = titulo === 'Combustível', diario = ehLancDiario(leituraSet);
     const num = v => parseFloat((v+'').replace(',','.'));
     const fmt = (n, casas) => n.toLocaleString('pt-BR', {minimumFractionDigits: casas, maximumFractionDigits: casas});
     let soma = 0, comDado = 0;
     const linhas = itens.map(it => {
       const arr = (leituraSet[it.id] || []).filter(l => (!inicio || l.data >= inicio) && (!fim || l.data <= fim) && !isNaN(num(l.valor))).sort((a,b) => a.data.localeCompare(b.data));
-      if(arr.length < 2) return `<tr><th scope="row">${esc(it.nome)}</th><td colspan="4" style="text-align:left;color:var(--text-faint);">menos de duas leituras no período</td></tr>`;
-      const p = arr[0], u = arr[arr.length-1], total = num(u.valor) - num(p.valor);
-      const dias = Math.max(1, Math.round((new Date(u.data) - new Date(p.data)) / 86400000));
-      const h = calcularTotalEMedia(leituras, it.id, p.data, u.data);
+      if(diario){
+        if(!arr.length) return `<tr><th scope="row">${esc(it.nome)}</th><td colspan="4" style="text-align:left;color:var(--text-faint);">nenhum óleo lançado no período</td></tr>`;
+      } else if(arr.length < 2) return `<tr><th scope="row">${esc(it.nome)}</th><td colspan="4" style="text-align:left;color:var(--text-faint);">menos de duas leituras no período</td></tr>`;
+      const p = arr[0], u = arr[arr.length-1];
+      const total = diario ? arr.reduce((s, l) => s + num(l.valor), 0) : num(u.valor) - num(p.valor);
+      const dIni = diario ? inicioRegistro(it.id, inicio, fim, p.data) : p.data, dFim = diario ? (fim || new Date().toISOString().slice(0, 10)) : u.data;
+      const dias = Math.max(1, Math.round((new Date(dFim) - new Date(dIni)) / 86400000));
+      const h = calcularTotalEMedia(leituras, it.id, dIni, dFim);
       soma += total; comDado++;
       return `<tr><th scope="row">${esc(it.nome)}<span>${fmtDate(p.data).slice(0,5)} a ${fmtDate(u.data).slice(0,5)}</span></th>
         <td><b>${fmt(total, comb ? 1 : 0)}</b></td><td>${fmt(total/dias, comb ? 2 : 1)}</td><td>${h && h.total > 0 ? fmt(h.total,0) : '—'}</td><td>${h && h.total > 0 ? (comb ? fmt(total*1000/h.total,0) : fmt(total/h.total*100,1)) : '—'}</td></tr>`;
     }).join('');
     consultaHtml = `<div class="dash-consulta">
       <div style="color:var(--text);font-size:12px;font-weight:600;margin-bottom:2px;">${icone} Consumo no período, ${grupoNome.toLowerCase()}</div>
-      <p class="empty-hint" style="padding:0 0 8px;">${inicio ? fmtDate(inicio) : 'início'} a ${fim ? fmtDate(fim) : 'hoje'}. Diferença entre a primeira e a última leitura de cada motor dentro do período.</p>
+      <p class="empty-hint" style="padding:0 0 8px;">${inicio ? fmtDate(inicio) : 'início'} a ${fim ? fmtDate(fim) : 'hoje'}. ${diario ? 'Soma dos litros lançados no Registro diário (inclui as suplementações) de cada motor dentro do período.' : 'Diferença entre a primeira e a última leitura de cada motor dentro do período.'}</p>
       <div style="overflow-x:auto;"><table>
         <thead><tr><th scope="col">Motor</th><th scope="col">Consumo (${unidade})</th><th scope="col">${unidade}/dia</th><th scope="col">Horas</th><th scope="col">${comb ? 'L/h' : 'L/100 h'}</th></tr></thead>
         <tbody>${linhas}</tbody>
@@ -5139,22 +5168,36 @@ function renderDashConsumo(leituraSet, unidade, titulo){
     return;
   }
 
-  dashChartTempo = new Chart(document.getElementById('dash-chart-tempo'), {
-    type: 'line',
-    data: {
-      datasets: seriesTempo.filter(s => s.serie.length > 0).map(s => ({
-        label: s.nome, borderColor: s.cor, backgroundColor: s.cor, borderWidth: 2, pointRadius: 3, tension: 0.2,
-        data: s.serie.map(p => ({ x: p.data, y: Math.round(p.taxa * 1000) / 1000 }))
-      }))
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { type: 'time', time: { unit: 'month' } }, y: { title: { display: true, text: unidade+'/h' } } }
-    }
+  /* eixo de datas: usa o adaptador de datas; se ele não carregar, cai num eixo simples com as datas escritas (dd/mm) */
+  const dsTempo = seriesTempo.filter(s => s.serie.length > 0);
+  const optTempo = eixoX => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { x: eixoX, y: { title: { display: true, text: unidade+'/h' } } }
   });
+  try{
+    dashChartTempo = new Chart(document.getElementById('dash-chart-tempo'), {
+      type: 'line',
+      data: { datasets: dsTempo.map(s => ({ label: s.nome, borderColor: s.cor, backgroundColor: s.cor, borderWidth: 2, pointRadius: 3, tension: 0.2,
+        data: s.serie.map(p => ({ x: p.data, y: Math.round(p.taxa * 1000) / 1000 })) })) },
+      options: optTempo({ type: 'time', time: { unit: 'month' } })
+    });
+  }catch(e){
+    console.warn('Gráfico no tempo sem adaptador de datas, usando eixo simples', e);
+    try{ if(dashChartTempo) dashChartTempo.destroy(); }catch(_){}
+    const datas = [...new Set(dsTempo.flatMap(s => s.serie.map(p => p.data)))].sort();
+    try{
+      dashChartTempo = new Chart(document.getElementById('dash-chart-tempo'), {
+        type: 'line',
+        data: { labels: datas.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)),
+          datasets: dsTempo.map(s => { const m = {}; s.serie.forEach(p => { m[p.data] = Math.round(p.taxa * 1000) / 1000; });
+            return { label: s.nome, borderColor: s.cor, backgroundColor: s.cor, borderWidth: 2, pointRadius: 3, tension: 0.2, spanGaps: true, data: datas.map(d => m[d] ?? null) }; }) },
+        options: optTempo({ type: 'category' })
+      });
+    }catch(e2){ console.error('Gráfico no tempo', e2); }
+  }
 
-  dashChartHorimetro = new Chart(document.getElementById('dash-chart-horimetro'), {
+  try{ dashChartHorimetro = new Chart(document.getElementById('dash-chart-horimetro'), {
     type: 'line',
     data: {
       datasets: pontosHorimetro.filter(p => p.ponto).map(p => ({
@@ -5167,7 +5210,7 @@ function renderDashConsumo(leituraSet, unidade, titulo){
       plugins: { legend: { display: false } },
       scales: { x: { type: 'linear', title: { display: true, text: 'Horas rodadas no período' } }, y: { title: { display: true, text: unidade } } }
     }
-  });
+  }); }catch(e){ console.error('Gráfico por horímetro', e); }
 }
 document.querySelectorAll('.dash-subtab').forEach(el => {
   el.addEventListener('click', () => renderDashSubtab(el.dataset.dash));
