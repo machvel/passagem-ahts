@@ -466,7 +466,7 @@
     #tab-novo,#tab-ferramentas{column-count:2;column-gap:20px;}
     /* Manutenção: "Registrar manutenção" fica sempre na coluna da direita; o resto à esquerda */
     #tab-diario{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 20px;align-items:start;}
-    #tab-diario:not([style*="none"]){display:grid !important;}   /* a troca de aba põe display:block; aqui vira grade */
+    body:not(.inicio) #tab-diario:not([style*="none"]){display:grid !important;}   /* a troca de aba põe display:block; aqui vira grade (nunca na tela inicial) */
     #tab-diario > *{grid-column:1;min-width:0;}
     #tab-diario > .painel-registrar{grid-column:2;grid-row:1 / span 30;margin-top:0 !important;position:sticky;top:62px;max-height:calc(100vh - 76px);overflow:auto;}
     #tab-diario > .panel:first-child{margin-top:0;}
