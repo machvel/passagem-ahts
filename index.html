@@ -645,6 +645,9 @@
       <div id="seta-registro-diario" style="font-size:16px;color:var(--accent);flex-shrink:0;">▼</div>
     </div>
     <div id="corpo-registro-diario" style="display:none;margin-top:10px;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+        <button type="button" id="btn-galoes" aria-pressed="false" title="Mostra o lifetime fuel também em galões (só para ver; o lançamento continua em litros)" style="appearance:none;background:var(--panel-2);color:var(--text-dim);border:1px solid var(--border-strong);border-radius:4px;padding:3px 9px;font-size:10.5px;font-family:var(--mono);cursor:pointer;min-height:0;">L → gal</button>
+      </div>
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:10px;">
         <input type="date" id="h-diario-data" style="flex:0 0 150px;">
       </div>
@@ -2433,7 +2436,7 @@ function buildOleoMultiHtml(item, idsPermitidos){
         const chave = `${equipId}|${sub}`;
         const det = item.oleoResultados[chave] || (item.oleoResultados[chave] = {resultado:'Normal', descricao:''});
         if(!det.horimetro){
-          const ultimaLeitura = getUltimaLeitura(equipId);
+          const ultimaLeitura = getUltimaLeitura(idHorimetro(equipId, sub));
           if(ultimaLeitura) det.horimetro = ultimaLeitura.valor;
         }
         if(!det.oilServiceInput && det.horimetro) det.oilServiceInput = calcularHorasDesdeTrocaOleo(equipId, det.horimetro);
@@ -2750,6 +2753,8 @@ const ITENS_COM_HORIMETRO = [];
 SECOES.forEach(sec => sec.itens.forEach(it => {
   if(it.tipo === 'motor' || (it.tipo === 'simples' && it.horimetro)) ITENS_COM_HORIMETRO.push(it);
 }));
+/* compressores de ar: um horímetro para cada um no Registro diário */
+ITENS_COM_HORIMETRO.push({id:'comp1', nome:'Compressor de Ar 1', tipo:'simples', horimetro:true}, {id:'comp2', nome:'Compressor de Ar 2', tipo:'simples', horimetro:true});
 
 const MOTORES_ITEMS = [];
 SECOES.forEach(sec => sec.itens.forEach(it => {
@@ -2843,6 +2848,11 @@ function idFluigComNomes(idFluigStr){
   }).join(', ');
 }
 
+/* horímetro próprio de um item (ex.: Compressor de Ar 1 -> comp1, lançado no Registro diário) */
+function idHorimetro(equipId, sub){
+  if(equipId === 'comp' && sub){ const n = (String(sub).match(/(\d+)\s*$/) || [])[1]; if(n) return 'comp' + n; }
+  return equipId;
+}
 function getUltimaLeitura(itId){
   const arr = leituras[itId] || [];
   if(!arr.length) return null;
@@ -6465,6 +6475,30 @@ document.getElementById('btn-exportar-excel').addEventListener('click', () => {
 
 let initialLoadPromise = acessoPronto.then(loadEntries);   /* espera o login */
 
+
+/* botão "L → gal": mostra embaixo de cada lifetime fuel o valor em galões americanos (1 gal = 3,7854 L). Só exibição. */
+(function(){
+  const btn = document.getElementById('btn-galoes'), lista = document.getElementById('lista-diario');
+  if(!btn || !lista) return;
+  const L_POR_GAL = 3.7854;
+  let ligado = false; try{ ligado = localStorage.getItem('ahts_galoes') === '1'; }catch(e){}
+  const fmtGal = v => { const n = parseFloat(String(v || '').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? '' : (n / L_POR_GAL).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' gal'; };
+  function pintar(){
+    lista.querySelectorAll('input[data-fuel-id]').forEach(inp => {
+      const linha = inp.closest('.row') || inp.parentElement;
+      let dica = linha.nextElementSibling && linha.nextElementSibling.classList.contains('gal-dica') ? linha.nextElementSibling : null;
+      if(!ligado){ if(dica) dica.remove(); return; }
+      if(!dica){ dica = document.createElement('div'); dica.className = 'gal-dica'; dica.style.cssText = 'font-size:10px;color:var(--accent);text-align:right;margin:2px 18px 0 0;font-family:var(--mono);'; linha.after(dica); }
+      const v = inp.value || inp.placeholder; dica.textContent = v && v !== '—' ? '≈ ' + fmtGal(v) + (inp.value ? '' : ' (última)') : '';
+    });
+    btn.setAttribute('aria-pressed', ligado); btn.style.background = ligado ? 'var(--accent-dim)' : 'var(--panel-2)'; btn.style.color = ligado ? 'var(--accent)' : 'var(--text-dim)';
+    btn.textContent = ligado ? 'L → gal ✓' : 'L → gal';
+  }
+  btn.addEventListener('click', () => { ligado = !ligado; try{ localStorage.setItem('ahts_galoes', ligado ? '1' : '0'); }catch(e){} pintar(); });
+  lista.addEventListener('input', e => { if(e.target.matches('input[data-fuel-id]')) pintar(); });
+  new MutationObserver(() => { if(ligado && lista.querySelector('input[data-fuel-id]') && !lista.querySelector('.gal-dica')) pintar(); }).observe(lista, { childList: true, subtree: true });
+  pintar();
+})();
 /* botão do tema: escuro <-> cinza (padrão Windows); a escolha fica salva neste aparelho */
 (function(){
   const b = document.getElementById('btn-tema'); if(!b) return;
