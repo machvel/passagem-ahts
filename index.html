@@ -506,6 +506,11 @@
     .o-toast{left:auto;right:24px;bottom:24px;border:2px solid #FFD400;border-radius:8px;max-width:520px;}
   }
 
+  .plan-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start;}
+  .plan-cols .save-btn{padding:10px 6px;font-size:11.5px;}
+  .plan-datas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;}
+  .plan-datas input{min-width:0;width:100%;font-size:12px;padding:7px 4px;}
+  @media (max-width:480px){ .plan-datas{grid-template-columns:1fr;gap:2px;} }
   /* ===== Tema cinza padrão Windows: escolhido no botão do topo (sem escolha: cinza no computador, escuro no celular) ===== */
   html.tema-cinza{--bg:#f0f0f0; --panel:#ffffff; --panel-2:#f7f7f7;
       --border:#d9d9d9; --border-strong:#adadad;
@@ -765,11 +770,23 @@
   </div>
   <div class="panel" style="margin-top:12px;">
     <div class="section-title" style="margin-bottom:8px;">Controle mensal (planilhas)</div>
-    <p class="empty-hint" style="padding:0 0 8px;">Gera a planilha de bordo do mês (26 a 25), no mesmo modelo, com o consumo diário e os recebimentos lançados aqui na Condução.</p>
-    <label style="display:block;font-size:12px;margin-bottom:8px;">Mês <select id="plan-mes" style="background:var(--bg);color:var(--text);border:1px solid var(--border-strong);border-radius:6px;padding:7px 6px;font-size:12.5px;margin-left:6px;"></select></label>
-    <div class="busca-botoes"><button class="save-btn" type="button" data-plan="agua">Planilha de água</button>
-    <button class="save-btn" type="button" data-plan="diesel">Planilha de diesel</button></div>
+    <div class="plan-cols">
+      <div>
+        <label>Mês (26 a 25)<select id="plan-mes" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border-strong);border-radius:6px;padding:8px 6px;font-size:12.5px;min-height:38px;"></select></label>
+        <button class="save-btn" type="button" data-plan="agua" style="margin-top:8px;">Planilha de água</button>
+        <button class="save-btn" type="button" data-plan="diesel" style="margin-top:8px;">Planilha de diesel</button>
+      </div>
+      <div>
+        <div class="plan-datas">
+          <label>De<input type="date" id="cp-de"></label>
+          <label>Até<input type="date" id="cp-ate"></label>
+        </div>
+        <button class="save-btn" type="button" data-cp="agua" style="margin-top:8px;">Consumo de água</button>
+        <button class="save-btn" type="button" data-cp="diesel" style="margin-top:8px;">Consumo de diesel</button>
+      </div>
+    </div>
     <p class="empty-hint" id="plan-status" role="status" style="padding:8px 0 0;"></p>
+    <div id="cp-res" style="margin-top:8px;font-size:13px;"></div>
   </div>
 
   <div class="panel" style="margin-top:12px;">
@@ -7241,6 +7258,33 @@ async function gerarControleMensal(k, ano, mes){
   }));
 })();
 
+
+/* consumo de água e diesel num período livre (Condução + o que veio das planilhas de bordo) */
+(function(){
+  const de = $("cp-de"), ate = $("cp-ate"), res = $("cp-res"), botoes = document.querySelectorAll("[data-cp]"); if (!botoes.length) return;
+  const hoje = new Date(); ate.value = isoLocal(hoje);
+  const ini = new Date(hoje.getFullYear(), hoje.getMonth() - (hoje.getDate() >= 26 ? 0 : 1), 26, 12); de.value = isoLocal(ini);
+  const f3 = n => n.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  botoes.forEach(btn => btn.addEventListener("click", async () => {
+    const k = btn.dataset.cp, a = de.value, b = ate.value;
+    if (!a || !b) { res.textContent = "Escolha as duas datas."; return; }
+    if (a > b) { res.textContent = "A data \"De\" está depois da data \"Até\"."; return; }
+    btn.disabled = true; res.textContent = "Calculando...";
+    if (nuvemOk()) { try { await buscaNuvem(a, b); } catch (e) {} }
+    dias[data] = state;
+    const ds = []; for (const d = new Date(a + "T12:00:00"); isoLocal(d) <= b; d.setDate(d.getDate() + 1)) ds.push(isoLocal(d));
+    const linha = (k, nome) => {
+      let tot = 0, n = 0, rec = 0;
+      ds.forEach(d => { const p = diaPlan(d, k); if (p.cons !== null) { tot += p.cons; n++; } if (p.rec) rec += p.rec.q; });
+      const media = n ? tot / n : 0, falta = ds.length - n;
+      return `<div style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:9px 11px;margin-bottom:6px;">
+        <b>${nome}:</b> ${f3(tot)} m³ consumidos &nbsp;·&nbsp; média ${f3(media)} m³/dia${rec ? ` &nbsp;·&nbsp; ${f3(rec)} m³ recebidos` : ""}
+        <div style="font-size:11px;color:var(--text-faint);margin-top:3px;">${n} de ${ds.length} dia(s) com consumo lançado${falta ? ` (a média conta só os dias lançados)` : ""}</div></div>`;
+    };
+    res.innerHTML = `<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;">${fmtDate(a)} a ${fmtDate(b)} (${ds.length} dia(s))</div>` + (k === "agua" ? linha("agua", "Água potável") : linha("diesel", "Óleo diesel"));
+    btn.disabled = false;
+  }));
+})();
 $("est-ajustar").addEventListener("click", () => {
   $("est-form-dia").textContent = fmtDate(data); $("est-in-agua").value = ""; $("est-in-diesel").value = "";
   $("est-form").hidden = false; $("est-status").textContent = ""; $("est-in-agua").focus();
