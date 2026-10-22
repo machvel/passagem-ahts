@@ -509,7 +509,7 @@
   .plan-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start;}
   .plan-cols .save-btn{padding:10px 6px;font-size:11.5px;}
   .plan-datas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;}
-  .plan-datas input{min-width:0;width:100%;font-size:12px;padding:7px 4px;}
+  .plan-datas input,.plan-cols select{min-width:0;width:100%;box-sizing:border-box;height:38px !important;min-height:38px !important;font-size:12.5px !important;padding:4px 6px !important;}
   @media (max-width:480px){ .plan-datas{grid-template-columns:1fr;gap:2px;} }
   /* ===== Tema cinza padrão Windows: escolhido no botão do topo (sem escolha: cinza no computador, escuro no celular) ===== */
   html.tema-cinza{--bg:#f0f0f0; --panel:#ffffff; --panel-2:#f7f7f7;
