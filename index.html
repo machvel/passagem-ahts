@@ -2870,6 +2870,12 @@ function idHorimetro(equipId, sub){
   if(equipId === 'comp' && sub){ const n = (String(sub).match(/(\d+)\s*$/) || [])[1]; if(n) return 'comp' + n; }
   return equipId;
 }
+/* " — Corrigido em 06/11/2026" (sem data nas correções antigas) */
+function textoCorrigido(m){
+  if(!m || m.tipo !== 'Corretiva' || m.corrigido !== true) return '';
+  const d = m.dataCorrecao ? m.dataCorrecao.split('-').reverse().join('/') : '';
+  return ' — Corrigido' + (d ? ' em ' + d : '');
+}
 function getUltimaLeitura(itId){
   const arr = leituras[itId] || [];
   if(!arr.length) return null;
@@ -3805,7 +3811,7 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
 
     if(diariasObs.length){
       const bloco = diariasObs.map(m => {
-        const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
+        const statusTxt = textoCorrigido(m);
         const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
         const resolvidoTxt = (m.tipo === 'CBM' && m.resolvidoCbm) ? (m.resolvidoCbmObs ? ` (Resolvido: ${m.resolvidoCbmObs})` : ' (Resolvido)') : '';
         const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}${resolvidoTxt}` : '';
@@ -4814,7 +4820,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
       if(tipoBusca && m.tipo !== tipoBusca) return;
       if(palavraBusca && !descricaoManut(m).toLowerCase().includes(palavraBusca)) return;
       let statusTxt = '';
-      if(m.tipo === 'Corretiva') statusTxt = m.corrigido ? ' — Corrigido' : ' — Não corrigido';
+      if(m.tipo === 'Corretiva') statusTxt = m.corrigido ? textoCorrigido(m) : ' — Não corrigido';
       if(m.tipo === 'CBM' && m.resultado) statusTxt = ` — Resultado: ${m.resultado}`;
       const idTxt = m.idFluig ? ` | ID Fluig: ${idFluigComNomes(m.idFluig)}` : '';
       const pendente = m.tipo === 'Corretiva' && m.corrigido === false;
@@ -4884,8 +4890,12 @@ async function marcarComoCorrigido(equipId, recId, correcao){
   const arr = manutencoesDiarias[equipId] || [];
   const registro = arr.find(m => m.id === recId);
   if(!registro) return;
+  const agora = new Date(), p2c = n => String(n).padStart(2, '0');
+  registro.statusAntesCorrecao = registro.statusEquip || '';
   registro.corrigido = true;
   registro.correcao = (correcao || '').trim();
+  registro.dataCorrecao = `${agora.getFullYear()}-${p2c(agora.getMonth() + 1)}-${p2c(agora.getDate())}`;
+  registro.quartoCorrecao = agora.getHours() < 12 ? 'a' : 'b';
   registro.statusEquip = 'operacional';
   await salvarManutencoesDiarias();
   showToast('Marcado como corrigido');
@@ -5600,7 +5610,7 @@ function buildReport(){
     let obsFinal = st.obs.trim();
     if(diariasObs.length){
       const bloco = diariasObs.map(m => {
-        const statusTxt = (m.tipo === 'Corretiva' && m.corrigido === true) ? ' — Corrigido' : '';
+        const statusTxt = textoCorrigido(m);
         const correcaoTxt = (m.tipo === 'Corretiva' && m.corrigido === true && m.correcao) ? ` (Correção: ${m.correcao})` : '';
         const resolvidoTxt = (m.tipo === 'CBM' && m.resolvidoCbm) ? (m.resolvidoCbmObs ? ` (Resolvido: ${m.resolvidoCbmObs})` : ' (Resolvido)') : '';
         const resultadoTxt = (m.tipo === 'CBM' && m.resultado) ? ` — Resultado: ${m.resultado}${resolvidoTxt}` : '';
@@ -6880,8 +6890,21 @@ function manutDoDia(dRef){
       const extra = `${m.horimetro && String(m.horimetro).trim() ? ", horímetro " + escH(String(m.horimetro).trim()) + " h" : ""}${m.idFluig && String(m.idFluig).trim() ? ", Fluig " + escH(String(m.idFluig).trim()) : ""}`;
       /* frase do bandalho: "Manutenção Preventiva 1000h: ME#1" */
       const descM = m.descricao && String(m.descricao).trim() && String(m.descricao).trim() !== "Outros" ? String(m.descricao).trim() : "";
-      const frase = `Manutenção ${escH(m.tipo || "")}${descM ? " " + escH(descM) : ""}`.replace(/\s+/g, " ").trim() + `: ${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}${extra}${m.tipo === "Corretiva" ? (m.corrigido === true ? ", corrigido" : ", não corrigido") + (m.statusEquip === "nao_operacional" ? ", equipamento não operacional" : "") : ""}`;
+      /* como estava NAQUELE dia: se foi corrigida depois, aqui ainda aparece "não corrigido" */
+      const corrigidaDepois = m.corrigido === true && m.dataCorrecao && m.dataCorrecao > data;
+      const corrNoDia = m.corrigido === true && !corrigidaDepois;
+      const stNoDia = corrigidaDepois ? (m.statusAntesCorrecao || m.statusEquip) : m.statusEquip;
+      const frase = `Manutenção ${escH(m.tipo || "")}${descM ? " " + escH(descM) : ""}`.replace(/\s+/g, " ").trim() + `: ${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}${extra}${m.tipo === "Corretiva" ? (corrNoDia ? ", corrigido" + (m.correcao ? " (correção: " + escH(m.correcao) + ")" : "") : ", não corrigido") + (stNoDia === "nao_operacional" ? ", equipamento não operacional" : "") : ""}`;
       man.push({ ref: m, serv: false, quarto: m.quarto || "", frase, txt: `<b>${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}</b> (${escH(m.tipo || "Manutenção")})${m.descricao ? ": " + escH(m.descricao) : ""}${m.horimetro && String(m.horimetro).trim() ? ", horímetro " + escH(String(m.horimetro).trim()) + " h" : ""}${m.idFluig && String(m.idFluig).trim() ? ", Fluig " + escH(String(m.idFluig).trim()) : ""}` });
+    }));
+    /* pendência corretiva corrigida neste dia (registrada em outro dia) */
+    Object.keys(manutencoesDiarias || {}).forEach(eid => (manutencoesDiarias[eid] || []).forEach(m => {
+      if (!m || m.tipo !== "Corretiva" || m.corrigido !== true || m.dataCorrecao !== data || m.data === data) return;
+      const eq = (typeof EQUIP_ITEM_MAP !== "undefined" && EQUIP_ITEM_MAP[eid]) ? EQUIP_ITEM_MAP[eid].nome : eid;
+      const descM = m.descricao && String(m.descricao).trim() && String(m.descricao).trim() !== "Outros" ? " " + escH(String(m.descricao).trim()) : "";
+      const quando = String(m.data || "").split("-").reverse().join("/");
+      const frase = `Corrigida pendência da Manutenção Corretiva${descM}: ${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}, registrada em ${quando}${m.correcao ? ". Correção: " + escH(m.correcao) : ""}`;
+      man.push({ ref: m, serv: false, quarto: m.quartoCorrecao || "", frase, txt: `<b>${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}</b> (Corretiva corrigida)${m.correcao ? ": " + escH(m.correcao) : ""}, registrada em ${quando}` });
     }));
     (servicosDiarios || []).forEach(sv => {
       if (!sv || sv.data !== data) return;
