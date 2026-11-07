@@ -2619,14 +2619,24 @@ function getEstadoMaisRecente(itId){
   return null;
 }
 
+/* linhas "[Diário dd/mm/aaaa] ..." são geradas pelo app a partir das corretivas/CBM do Diário:
+   nunca são copiadas de uma passagem para a outra — sempre recalculadas, para sumir quando a pendência for resolvida */
+const ehLinhaDiario = p => /^\[Diário \d{2}\/\d{2}\/\d{4}\]/.test(String(p || '').trim());
+function linhaPendenciaDiario(m){
+  const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
+  return `[Diário ${fmtDate(m.data)}] ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
+}
+function linhasDiarioPendentes(itemId){
+  return (manutencoesDiarias[itemId] || []).filter(manutencaoEhPendente).map(linhaPendenciaDiario);
+}
 function getPendenciasAbertas(){
   const lista = [];
   SECOES.forEach(sec => sec.itens.forEach(it => {
     const info = getEstadoMaisRecente(it.id);
     if(!info) return;
     const isAtencao = info.entry.atencao || info.entry.status === 'atencao' || info.entry.status === 'nao_operacional';
-    if(!isAtencao) return;
-    getPendenciasArr(info.entry).forEach(p => {
+    const manuais = isAtencao ? getPendenciasArr(info.entry).filter(p => !ehLinhaDiario(p)) : [];
+    manuais.concat(linhasDiarioPendentes(it.id)).forEach(p => {
       lista.push({id: it.id, secKey: sec.key, nome: it.nome, secao: sec.titulo, pendencia: p, data: info.data});
     });
   }));
@@ -3784,7 +3794,7 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
   let preenchidos = 0;
   ITENS_COM_HORIMETRO.forEach(it => {
     const l = getLeituraAteAData(leituras[it.id], fim);
-    if(l){ equipState[it.id].horimetro = l.valor; preenchidos++; }
+    if(l && equipState[it.id]){ equipState[it.id].horimetro = l.valor; preenchidos++; }   /* compressores 1/2 só têm horímetro no Registro diário */
   });
 
   SECOES.forEach(sec => sec.itens.forEach(it => {
@@ -3828,11 +3838,11 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
         st.obs = st.obs.trim() ? st.obs.trim() + '\n' + blocoServicos : blocoServicos;
       }
     }
+    st.pendencias = st.pendencias.filter(p => !ehLinhaDiario(p));   /* tira as do Diário que já foram resolvidas */
     if(diariasPendentes.length){
       st.atencao = true;
       diariasPendentes.forEach(m => {
-        const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        const linha = `[Diário ${fmtDate(m.data)}] ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
+        const linha = linhaPendenciaDiario(m);
         if(!st.pendencias.includes(linha)) st.pendencias.push(linha);
       });
     }
@@ -5633,11 +5643,10 @@ function buildReport(){
       }
     }
 
-    let pendenciasFinal = st.pendencias.map(p => p.trim()).filter(p => p !== '');
+    let pendenciasFinal = st.pendencias.map(p => p.trim()).filter(p => p !== '' && !ehLinhaDiario(p));
     if(diariasPendentes.length){
       diariasPendentes.forEach(m => {
-        const idTxt = m.idFluig ? ` | ID Fluig: ${m.idFluig}` : '';
-        const linha = `[Diário ${fmtDate(m.data)}] ${descricaoManut(m)}${m.horimetro ? ' (horímetro '+m.horimetro+'h)' : ''}${idTxt}`;
+        const linha = linhaPendenciaDiario(m);
         if(!pendenciasFinal.includes(linha)) pendenciasFinal.push(linha);
       });
     }
@@ -5983,7 +5992,7 @@ async function loadEntries(){
     const info = getEstadoMaisRecente(it.id);
     if(!info) return;
     const isAtencao = info.entry.atencao || info.entry.status === 'atencao' || info.entry.status === 'nao_operacional';
-    const arr = getPendenciasArr(info.entry);
+    const arr = getPendenciasArr(info.entry).filter(p => !ehLinhaDiario(p)).concat(linhasDiarioPendentes(it.id));
     if(isAtencao && arr.length){
       equipState[it.id].atencao = true;
       equipState[it.id].pendencias = arr.slice();
