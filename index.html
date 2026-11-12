@@ -2886,6 +2886,21 @@ function textoCorrigido(m){
   const d = m.dataCorrecao ? m.dataCorrecao.split('-').reverse().join('/') : '';
   return ' — Corrigido' + (d ? ' em ' + d : '');
 }
+/* Serviço Geral: escolhe um ou vários equipamentos, igual à amostra de óleo do CBM */
+function servicoEquipPickerHtml(item){
+  if(!item.itensVinc) item.itensVinc = item.itemId ? [item.itemId] : [];
+  const cat = item.categoriaEquipServico || '';
+  const sec = SECOES.find(sc => sc.key === cat);
+  const btn = (id, nome) => { const m = item.itensVinc.includes(id);
+    return `<div class="srv-eq-btn" data-id="${escA(id)}" style="background:${m?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${m?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${m?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${m?'600':'400'};cursor:pointer;white-space:nowrap;">${m?'✓ ':''}${esc(nome)}</div>`; };
+  const foraDaCategoria = item.itensVinc.filter(id => !sec || !sec.itens.some(it => it.id === id));
+  return `<select class="sel-servico-cat" style="width:100%;margin-bottom:8px;">
+      <option value="">Categoria...</option>
+      ${SECOES.map(sc => `<option value="${escA(sc.key)}" ${sc.key===cat?'selected':''}>${esc(sc.titulo)}</option>`).join('')}
+    </select>
+    ${sec ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:6px;">${sec.itens.map(it => btn(it.id, it.nome)).join('')}</div>` : ''}
+    ${foraDaCategoria.length ? `<div style="font-size:10.5px;color:var(--text-faint);margin:4px 0;">Também vinculado a:</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${foraDaCategoria.map(id => btn(id, (EQUIP_ITEM_MAP[id] || {}).nome || id)).join('')}</div>` : ''}`;
+}
 function getUltimaLeitura(itId){
   const arr = leituras[itId] || [];
   if(!arr.length) return null;
@@ -3363,10 +3378,6 @@ function renderManutencaoDraft(){
 
     let campoDetalheHtml;
     if(ehServicoGeral){
-      if(item.categoriaEquipServico && !item.itemId){
-        const secaoDefault = SECOES.find(s => s.key === item.categoriaEquipServico);
-        if(secaoDefault && secaoDefault.itens.length) item.itemId = secaoDefault.itens[0].id;
-      }
       campoDetalheHtml = `<select class="sel-categoria" style="flex:0 0 140px;">
           ${SERVICO_TIPOS.map(t => `<option value="${escA(t)}" ${t===item.categoria?'selected':''}>${esc(t)}</option>`).join('')}
         </select>
@@ -3377,10 +3388,8 @@ function renderManutencaoDraft(){
               <span style="font-size:10.5px;color:var(--text-faint);">vai sozinho para o Registro diário e não entra na passagem de serviço</span></div>`
           : `<div style="flex:1 1 100%;font-size:10.5px;color:var(--text-faint);margin-top:6px;">Suplementação de óleo: escolha abaixo um ME ou DG para informar os litros e lançar no Registro diário.</div>`) : ''}
         <div style="flex:1 1 100%;margin-top:6px;">
-          <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Vincular a um equipamento (opcional)</label>
-          <div style="display:flex;gap:8px;">
-            ${equipSelectorHtml('sel-servico-equip', item.categoriaEquipServico || '', item.itemId, true)}
-          </div>
+          <label style="font-size:10.5px;color:var(--text-faint);display:block;margin-bottom:4px;">Vincular a equipamento(s) (opcional) — escolha a categoria e toque nos equipamentos</label>
+          ${servicoEquipPickerHtml(item)}
         </div>`;
     }else if(usaSubItens){
       const opcoesSubItens = SUBITENS_POR_EQUIP[item.itemId];
@@ -3642,21 +3651,15 @@ function renderManutencaoDraft(){
       if(inpLitros) inpLitros.addEventListener('input', e => item.litros = e.target.value);
       row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
       if(!item.categoria) item.categoria = SERVICO_TIPOS[0];
-      row.querySelector('.sel-servico-equip-categoria').addEventListener('change', e => {
-        item.categoriaEquipServico = e.target.value;
-        const secU = SECOES.find(sc => sc.key === item.categoriaEquipServico);
-        item.itemId = secU && secU.itens.length === 1 ? secU.itens[0].id : '';
+      row.querySelector('.sel-servico-cat').addEventListener('change', e => { item.categoriaEquipServico = e.target.value; renderManutencaoDraft(); });
+      row.querySelectorAll('.srv-eq-btn').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.id, lista = item.itensVinc || (item.itensVinc = []), k = lista.indexOf(id);
+        if(k >= 0) lista.splice(k, 1);
+        else if(item.categoria === 'Suplementação') item.itensVinc = [id];   /* suplementação de óleo: um motor por vez */
+        else lista.push(id);
+        item.itemId = item.itensVinc[0] || '';
         renderManutencaoDraft();
-      });
-      const servicoItemGrid = row.querySelector('.sel-servico-equip-item-grid');
-      if(servicoItemGrid){
-        servicoItemGrid.addEventListener('click', e => {
-          const btn = e.target.closest('[data-item-id]');
-          if(!btn) return;
-          item.itemId = btn.dataset.itemId;
-          renderManutencaoDraft();
-        });
-      }
+      }));
     }else if(usaSubItens){
       if(!item.subItens) item.subItens = [];
       row.querySelectorAll('.chk-subitem').forEach(chk => {
@@ -4397,10 +4400,14 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
         if(antigo && antigo.litros && ajustarOleoDoDia(antigo.itemId, antigo.data, -numLitros(antigo.litros))) oleoAlterado = true;
         servicosDiarios = servicosDiarios.filter(s => s.id !== item.editandoServicoId);
       }
+      if(item.itensVinc && item.itensVinc.length) item.itemId = item.itensVinc[0];
       const novoServico = {id: item.editandoServicoId || uid(), data, tipo: item.categoria || 'Outros', texto, itemId: item.itemId || null};
       if(litros > 0){ novoServico.litros = String(litros).replace('.', ','); if(ajustarOleoDoDia(item.itemId, data, litros)) oleoAlterado = true; }
+      /* vinculado a mais de um equipamento: o mesmo serviço fica registrado em cada um, na ordem em que foram escolhidos */
+      const extras = (item.itensVinc || []).filter(id => id && id !== novoServico.itemId);
       servicosDiarios.push(novoServico);
-      servicosSalvos++;
+      extras.forEach(id => servicosDiarios.push({id: uid(), data, tipo: novoServico.tipo, texto, itemId: id}));
+      servicosSalvos += 1 + extras.length;
       return;
     }
     if(item.cbmFixo){
@@ -6535,6 +6542,7 @@ let initialLoadPromise = acessoPronto.then(loadEntries);   /* espera o login */
   new MutationObserver(() => { if(ligado && lista.querySelector('input[data-fuel-id]') && !lista.querySelector('.gal-dica')) pintar(); }).observe(lista, { childList: true, subtree: true });
   pintar();
 })();
+
 /* botão do tema: escuro <-> cinza (padrão Windows); a escolha fica salva neste aparelho */
 (function(){
   const b = document.getElementById('btn-tema'); if(!b) return;
@@ -6915,9 +6923,18 @@ function manutDoDia(dRef){
       const frase = `Corrigida pendência da Manutenção Corretiva${descM}: ${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}, registrada em ${quando}${m.correcao ? ". Correção: " + escH(m.correcao) : ""}`;
       man.push({ ref: m, serv: false, quarto: m.quartoCorrecao || "", frase, txt: `<b>${escH(eq)}${m.subItem ? " " + escH(m.subItem) : ""}</b> (Corretiva corrigida)${m.correcao ? ": " + escH(m.correcao) : ""}, registrada em ${quando}` });
     }));
+    /* o mesmo serviço vinculado a vários equipamentos sai numa linha só: "Limpeza dos filtros: ME#1, ME#2 e DG#3" */
+    const nomeEq = id => id && typeof EQUIP_ITEM_MAP !== "undefined" && EQUIP_ITEM_MAP[id] ? EQUIP_ITEM_MAP[id].nome : "";
+    const juntar = l => l.length > 1 ? l.slice(0, -1).join(", ") + " e " + l[l.length - 1] : (l[0] || "");
+    const grupos = {}, ordem = [];
     (servicosDiarios || []).forEach(sv => {
       if (!sv || sv.data !== data) return;
-      const eq = sv.itemId && typeof EQUIP_ITEM_MAP !== "undefined" && EQUIP_ITEM_MAP[sv.itemId] ? EQUIP_ITEM_MAP[sv.itemId].nome : "";
+      const k = sv.litros || !sv.itemId ? "u|" + sv.id : [sv.tipo, sv.texto, sv.quarto || ""].join("|");
+      if (!grupos[k]) { grupos[k] = { sv, eqs: [] }; ordem.push(k); }
+      const n = nomeEq(sv.itemId); if (n && !grupos[k].eqs.includes(n)) grupos[k].eqs.push(n);
+    });
+    ordem.map(k => grupos[k]).forEach(({ sv, eqs }) => {
+      const eq = juntar(eqs);
       const frase = sv.litros
         ? `Suplementação de óleo lubrificante: ${escH(eq)}, ${escH(String(sv.litros))} L${sv.texto && sv.texto !== "Óleo lubrificante" ? ", " + escH(sv.texto) : ""}`
         : sv.tipo === "Outros"   /* "Outros": no bandalho sai só o que foi escrito, sem a palavra "Outros" */
