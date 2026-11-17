@@ -1700,15 +1700,15 @@ const SECOES = [
     {id:'leme_be', nome:'Máquina do Leme BE', tipo:'simples', manut:['Filtro Óleo','Outras']}
   ]},
   {key:'propulsores', titulo:'Propulsores laterais', itens:[
-    {id:'bow1', nome:'Bow#1', tipo:'simples', manut:['Filtro Óleo','Outras']},
+    {id:'bow1', nome:'Bow#1', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
     {id:'bow1_vfd', nome:'Bow#1 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'bow2', nome:'Bow#2', tipo:'simples', manut:['Filtro Óleo','Outras']},
+    {id:'bow2', nome:'Bow#2', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
     {id:'bow2_vfd', nome:'Bow#2 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'bow3', nome:'Bow#3', tipo:'simples', manut:['Filtro Óleo','Outras']},
+    {id:'bow3', nome:'Bow#3', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
     {id:'bow3_vfd', nome:'Bow#3 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'stt1', nome:'STT#1', tipo:'simples', manut:['Filtro Óleo','Outras']},
+    {id:'stt1', nome:'STT#1', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
     {id:'stt1_vfd', nome:'STT#1 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'stt2', nome:'STT#2', tipo:'simples', manut:['Filtro Óleo','Outras']},
+    {id:'stt2', nome:'STT#2', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
     {id:'stt2_vfd', nome:'STT#2 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true}
   ]},
   {key:'compressores', titulo:'Compressores de ar', itens:[
@@ -2886,6 +2886,15 @@ function textoCorrigido(m){
   const d = m.dataCorrecao ? m.dataCorrecao.split('-').reverse().join('/') : '';
   return ' — Corrigido' + (d ? ' em ' + d : '');
 }
+/* nome de um serviço: "Redutora BB e BE..." -> equipamento + itens marcados */
+function nomeServicoEq(s){
+  if(!s || !s.itemId) return '';
+  const base = (EQUIP_ITEM_MAP[s.itemId] || {}).nome || s.itemId, subs = s.subItens || [];
+  if(!subs.length) return base;
+  const sec = secaoDoEquip(s.itemId);
+  const juntar = l => l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l[0];
+  return sec && sec.itens.length === 1 ? juntar(subs) : `${base} (${subs.join(', ')})`;
+}
 /* Serviço Geral: escolhe um ou vários equipamentos, igual à amostra de óleo do CBM */
 function servicoEquipPickerHtml(item){
   if(!item.itensVinc) item.itensVinc = item.itemId ? [item.itemId] : [];
@@ -2893,13 +2902,23 @@ function servicoEquipPickerHtml(item){
   const sec = SECOES.find(sc => sc.key === cat);
   const btn = (id, nome) => { const m = item.itensVinc.includes(id);
     return `<div class="srv-eq-btn" data-id="${escA(id)}" style="background:${m?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${m?'var(--accent)':'var(--border)'};border-radius:6px;padding:8px 10px;text-align:center;color:${m?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${m?'600':'400'};cursor:pointer;white-space:nowrap;">${m?'✓ ':''}${esc(nome)}</div>`; };
+  if(!item.subVinc) item.subVinc = {};
+  const unico = !!(sec && sec.itens.length === 1 && SUBITENS_POR_EQUIP[sec.itens[0].id]);   /* ex.: compressores: já mostra 1 e 2 */
+  const subBtn = (id, sub) => { const m = (item.subVinc[id] || []).includes(sub);
+    return `<div class="srv-sub-btn" data-id="${escA(id)}" data-sub="${escA(sub)}" style="background:${m?'var(--accent-dim)':'var(--panel-2)'};border:1px solid ${m?'var(--accent)':'var(--border)'};border-radius:6px;padding:7px 9px;text-align:center;color:${m?'var(--accent)':'var(--text-dim)'};font-size:11px;font-weight:${m?'600':'400'};cursor:pointer;">${m?'✓ ':''}${esc(sub)}</div>`; };
+  const gradeSub = id => `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${Math.max(...SUBITENS_POR_EQUIP[id].map(x => x.length)) > 9 ? 140 : 80}px,1fr));gap:6px;">${SUBITENS_POR_EQUIP[id].map(sub => subBtn(id, sub)).join('')}</div>`;
+  const caixasSub = item.itensVinc.filter(id => SUBITENS_POR_EQUIP[id] && !(unico && sec.itens[0].id === id)).map(id =>
+    `<div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0;">
+      <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">${esc((EQUIP_ITEM_MAP[id] || {}).nome || id)} — marque os itens (opcional)</div>${gradeSub(id)}</div>`).join('');
   const foraDaCategoria = item.itensVinc.filter(id => !sec || !sec.itens.some(it => it.id === id));
   return `<select class="sel-servico-cat" style="width:100%;margin-bottom:8px;">
       <option value="">Categoria...</option>
       ${SECOES.map(sc => `<option value="${escA(sc.key)}" ${sc.key===cat?'selected':''}>${esc(sc.titulo)}</option>`).join('')}
     </select>
-    ${sec ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:6px;">${sec.itens.map(it => btn(it.id, it.nome)).join('')}</div>` : ''}
-    ${foraDaCategoria.length ? `<div style="font-size:10.5px;color:var(--text-faint);margin:4px 0;">Também vinculado a:</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${foraDaCategoria.map(id => btn(id, (EQUIP_ITEM_MAP[id] || {}).nome || id)).join('')}</div>` : ''}`;
+    ${unico ? `<div style="margin-bottom:6px;">${gradeSub(sec.itens[0].id)}</div>`
+      : sec ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:6px;">${sec.itens.map(it => btn(it.id, it.nome)).join('')}</div>` : ''}
+    ${caixasSub}
+    ${foraDaCategoria.length ? `<div style="font-size:10.5px;color:var(--text-faint);margin:4px 0;">Também vinculado a:</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${foraDaCategoria.map(id => btn(id, nomeServicoEq({itemId: id, subItens: item.subVinc[id]}))).join('')}</div>` : ''}`;
 }
 function getUltimaLeitura(itId){
   const arr = leituras[itId] || [];
@@ -3652,9 +3671,24 @@ function renderManutencaoDraft(){
       row.querySelector('.campo-detalhe').addEventListener('input', e => item.descricao = e.target.value);
       if(!item.categoria) item.categoria = SERVICO_TIPOS[0];
       row.querySelector('.sel-servico-cat').addEventListener('change', e => { item.categoriaEquipServico = e.target.value; renderManutencaoDraft(); });
+      row.querySelectorAll('.srv-sub-btn').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.id, sub = b.dataset.sub;
+        if(!item.subVinc) item.subVinc = {};
+        const l = item.subVinc[id] || (item.subVinc[id] = []), k = l.indexOf(sub);
+        if(k >= 0) l.splice(k, 1); else l.push(sub);
+        if(!item.itensVinc) item.itensVinc = [];
+        const sec = secaoDoEquip(id);
+        if(sec && sec.itens.length === 1){   /* compressores / gerador de eixo: o equipamento entra ou sai junto com os itens */
+          const j = item.itensVinc.indexOf(id);
+          if(l.length && j < 0) item.itensVinc.push(id);
+          if(!l.length && j >= 0) item.itensVinc.splice(j, 1);
+        }
+        item.itemId = item.itensVinc[0] || '';
+        renderManutencaoDraft();
+      }));
       row.querySelectorAll('.srv-eq-btn').forEach(b => b.addEventListener('click', () => {
         const id = b.dataset.id, lista = item.itensVinc || (item.itensVinc = []), k = lista.indexOf(id);
-        if(k >= 0) lista.splice(k, 1);
+        if(k >= 0){ lista.splice(k, 1); if(item.subVinc) delete item.subVinc[id]; }
         else if(item.categoria === 'Suplementação') item.itensVinc = [id];   /* suplementação de óleo: um motor por vez */
         else lista.push(id);
         item.itemId = item.itensVinc[0] || '';
@@ -3836,7 +3870,7 @@ document.getElementById('btn-gerar-passagem').addEventListener('click', async ()
       }
     }
     if(servicosVinculados.length){
-      const blocoServicos = servicosVinculados.map(s => `[Diário ${fmtDate(s.data)}] Serviço Geral (${s.tipo}): ${s.texto}`).join('\n');
+      const blocoServicos = servicosVinculados.map(s => `[Diário ${fmtDate(s.data)}] Serviço Geral (${s.tipo}): ${s.texto}${s.subItens && s.subItens.length ? ' — ' + s.subItens.join(', ') : ''}`).join('\n');
       if(!st.obs.includes(blocoServicos)){
         st.obs = st.obs.trim() ? st.obs.trim() + '\n' + blocoServicos : blocoServicos;
       }
@@ -4402,11 +4436,13 @@ document.getElementById('btn-salvar-manutencao').addEventListener('click', async
       }
       if(item.itensVinc && item.itensVinc.length) item.itemId = item.itensVinc[0];
       const novoServico = {id: item.editandoServicoId || uid(), data, tipo: item.categoria || 'Outros', texto, itemId: item.itemId || null};
+      const subsDe = id => ((item.subVinc || {})[id] || []).slice();
+      if(novoServico.itemId && subsDe(novoServico.itemId).length) novoServico.subItens = subsDe(novoServico.itemId);
       if(litros > 0){ novoServico.litros = String(litros).replace('.', ','); if(ajustarOleoDoDia(item.itemId, data, litros)) oleoAlterado = true; }
       /* vinculado a mais de um equipamento: o mesmo serviço fica registrado em cada um, na ordem em que foram escolhidos */
       const extras = (item.itensVinc || []).filter(id => id && id !== novoServico.itemId);
       servicosDiarios.push(novoServico);
-      extras.forEach(id => servicosDiarios.push({id: uid(), data, tipo: novoServico.tipo, texto, itemId: id}));
+      extras.forEach(id => { const r = {id: uid(), data, tipo: novoServico.tipo, texto, itemId: id}; if(subsDe(id).length) r.subItens = subsDe(id); servicosDiarios.push(r); });
       servicosSalvos += 1 + extras.length;
       return;
     }
@@ -4665,11 +4701,12 @@ function renderStatusAmostras(idDestino){
     const situacao = diasRestantes === null ? 'semprazo' : (diasRestantes < 0 ? 'vencida' : (diasRestantes <= DIAS_AVISO_COLETA ? 'perto' : 'emdia'));
     const nomeExib = g.subItem ? `${g.equipNome}: ${g.subItem}` : g.equipNome;
     const labelAmostra = g.subTipo === 'oleo' ? (MAPA_AMOSTRA_EQUIP[chaveAmostraMapa(g.equipId, g.subItem)] || '') : '';
+    const numEquip = (typeof MAPA_ETIQUETA_LAB !== 'undefined' && MAPA_ETIQUETA_LAB[chaveAmostraMapa(g.equipId, g.subItem)]) || '';   /* Equip. Number do laboratório */
     const oleoLabel = g.subTipo === 'oleo' ? tipoOleoEquip[chaveTipoOleo(g.equipId, g.subItem)] : null;
     const resultadoTxt = (g.ultimoLaudo && g.ultimoLaudo.resultado) || 'Normal';
-    const textoBusca = [nomeExib, labelAmostra, oleoLabel || '', resultadoTxt, g.subTipo === 'vibracao' ? 'vibracao vibração' : 'oleo óleo'].join(' ')
+    const textoBusca = [numEquip, nomeExib, labelAmostra, oleoLabel || '', resultadoTxt, g.subTipo === 'vibracao' ? 'vibracao vibração' : 'oleo óleo'].join(' ')
       .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return { g, chavePrazo, diasRestantes, situacao, nomeExib, labelAmostra, oleoLabel, resultadoTxt, textoBusca };
+    return { g, chavePrazo, diasRestantes, situacao, nomeExib, labelAmostra, numEquip, oleoLabel, resultadoTxt, textoBusca };
   });
   if(itens.length === 0){
     resultEl.innerHTML = '<div class="busca-resultado-wrap"><p class="empty-hint">Nenhuma coleta (Vibração ou Amostra de Óleo) registrada ainda.</p></div>';
@@ -4760,7 +4797,7 @@ function renderStatusAmostras(idDestino){
       return `<div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);${borda}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
           <div>
-            <div style="color:#1a2332;font-size:12px;font-weight:600;">${icone} ${esc(it.nomeExib)}${it.labelAmostra && it.labelAmostra.toUpperCase().replace(/\s+/g,'') !== it.nomeExib.toUpperCase().replace(/\s+/g,'') ? ` <span style="color:#6b7688;font-weight:400;">(${esc(it.labelAmostra)})</span>` : ''}</div>
+            <div style="color:#1a2332;font-size:12px;font-weight:600;">${icone} ${it.numEquip ? `<span title="Número do equipamento no laboratório" style="display:inline-block;background:#1a2332;color:#fff;border-radius:4px;padding:1px 5px;font-size:10.5px;font-weight:700;margin-right:3px;">Nº ${esc(it.numEquip)}</span>` : ''}${esc(it.nomeExib)}${it.labelAmostra && it.labelAmostra.toUpperCase().replace(/\s+/g,'') !== it.nomeExib.toUpperCase().replace(/\s+/g,'') ? ` <span style="color:#6b7688;font-weight:400;">(${esc(it.labelAmostra)})</span>` : ''}</div>
             <div style="color:#6b7688;font-size:10px;">coletado ${fmtDate(g.ultimaColeta.data)} — ${diasTxt}</div>
             <div style="color:#6b7688;font-size:10px;">${g.ultimoLaudo ? `último laudo recebido em ${fmtDate(g.ultimoLaudo.data)}` : 'nenhum laudo recebido ainda'}</div>
             ${infoExtra.length ? `<div style="color:#6b7688;font-size:10px;">${esc(infoExtra.join(' · '))}</div>` : ''}
@@ -4855,7 +4892,7 @@ document.getElementById('btn-consultar-diario').addEventListener('click', () => 
         if(!s.itemId || !idsFiltro.includes(s.itemId)) return;
         if(!dentroPeriodo(s.data)) return;
         if(palavraBusca && !s.texto.toLowerCase().includes(palavraBusca)) return;
-        registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:`${EQUIP_ITEM_MAP[s.itemId].nome}: ${s.texto}${s.litros ? ' — ' + s.litros + ' L' : ''}`, servicoId: s.id, ehServicoGeral: true});
+        registros.push({data:s.data, tipo:'Serviço: '+s.tipo, desc:`${nomeServicoEq(s)}: ${s.texto}${s.litros ? ' — ' + s.litros + ' L' : ''}`, servicoId: s.id, ehServicoGeral: true});
       });
     }else{
       servicosDiarios.forEach(s => {
@@ -5505,6 +5542,8 @@ function editarServicoGeral(servicoId){
     litros: registro.litros || '',
     categoria: registro.tipo,
     categoriaEquipServico: registro.itemId ? (secaoDoEquip(registro.itemId) || {}).key || '' : '',
+    itensVinc: registro.itemId ? [registro.itemId] : [],
+    subVinc: registro.itemId && registro.subItens ? {[registro.itemId]: registro.subItens.slice()} : {},
     editandoServicoId: registro.id
   });
   document.getElementById('h-manutencao-data').value = registro.data;
@@ -5644,7 +5683,7 @@ function buildReport(){
     });
     const servicosVinculados = Object.values(servicosVinculadosMap2);
     if(servicosVinculados.length){
-      const blocoServicos = servicosVinculados.map(s => `[Diário ${fmtDate(s.data)}] Serviço Geral (${s.tipo}): ${s.texto}`).join('\n');
+      const blocoServicos = servicosVinculados.map(s => `[Diário ${fmtDate(s.data)}] Serviço Geral (${s.tipo}): ${s.texto}${s.subItens && s.subItens.length ? ' — ' + s.subItens.join(', ') : ''}`).join('\n');
       if(!obsFinal.includes(blocoServicos)){
         obsFinal = obsFinal ? obsFinal + '\n' + blocoServicos : blocoServicos;
       }
@@ -6931,7 +6970,7 @@ function manutDoDia(dRef){
       if (!sv || sv.data !== data) return;
       const k = sv.litros || !sv.itemId ? "u|" + sv.id : [sv.tipo, sv.texto, sv.quarto || ""].join("|");
       if (!grupos[k]) { grupos[k] = { sv, eqs: [] }; ordem.push(k); }
-      const n = nomeEq(sv.itemId); if (n && !grupos[k].eqs.includes(n)) grupos[k].eqs.push(n);
+      const n = typeof nomeServicoEq === "function" ? nomeServicoEq(sv) : nomeEq(sv.itemId); if (n && !grupos[k].eqs.includes(n)) grupos[k].eqs.push(n);
     });
     ordem.map(k => grupos[k]).forEach(({ sv, eqs }) => {
       const eq = juntar(eqs);
