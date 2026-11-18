@@ -2472,7 +2472,8 @@ function buildOleoMultiHtml(item, idsPermitidos){
     }else{
       const det = item.oleoResultados[equipId] || (item.oleoResultados[equipId] = {resultado:'Normal', descricao:''});
       if(!det.horimetro){
-        const ultimaLeitura = getUltimaLeitura(equipId);
+        /* thrusters: se o horímetro do próprio thruster não foi lançado, usa o do VFD dele */
+        const ultimaLeitura = getUltimaLeitura(equipId) || (EQUIP_ITEM_MAP[equipId + '_vfd'] ? getUltimaLeitura(equipId + '_vfd') : null);
         if(ultimaLeitura) det.horimetro = ultimaLeitura.valor;
       }
       if(!det.oilServiceInput && det.horimetro) det.oilServiceInput = calcularHorasDesdeTrocaOleo(equipId, det.horimetro);
