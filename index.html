@@ -1700,15 +1700,15 @@ const SECOES = [
     {id:'leme_be', nome:'Máquina do Leme BE', tipo:'simples', manut:['Filtro Óleo','Outras']}
   ]},
   {key:'propulsores', titulo:'Propulsores laterais', itens:[
-    {id:'bow1', nome:'Bow#1', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'bow1', nome:'Bow#1', tipo:'simples', manut:['Filtro Óleo','Outras']},
     {id:'bow1_vfd', nome:'Bow#1 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'bow2', nome:'Bow#2', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'bow2', nome:'Bow#2', tipo:'simples', manut:['Filtro Óleo','Outras']},
     {id:'bow2_vfd', nome:'Bow#2 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'bow3', nome:'Bow#3', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'bow3', nome:'Bow#3', tipo:'simples', manut:['Filtro Óleo','Outras']},
     {id:'bow3_vfd', nome:'Bow#3 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'stt1', nome:'STT#1', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'stt1', nome:'STT#1', tipo:'simples', manut:['Filtro Óleo','Outras']},
     {id:'stt1_vfd', nome:'STT#1 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true},
-    {id:'stt2', nome:'STT#2', tipo:'simples', manut:['Filtro Óleo','Outras'], horimetro:true},
+    {id:'stt2', nome:'STT#2', tipo:'simples', manut:['Filtro Óleo','Outras']},
     {id:'stt2_vfd', nome:'STT#2 — VFD', tipo:'simples', manut:['Limp. Mesh','Troca Mesh','Deioniz.','Glycol','Outras'], horimetro:true}
   ]},
   {key:'compressores', titulo:'Compressores de ar', itens:[
@@ -2472,8 +2472,8 @@ function buildOleoMultiHtml(item, idsPermitidos){
     }else{
       const det = item.oleoResultados[equipId] || (item.oleoResultados[equipId] = {resultado:'Normal', descricao:''});
       if(!det.horimetro){
-        /* thrusters: se o horímetro do próprio thruster não foi lançado, usa o do VFD dele */
-        const ultimaLeitura = getUltimaLeitura(equipId) || (EQUIP_ITEM_MAP[equipId + '_vfd'] ? getUltimaLeitura(equipId + '_vfd') : null);
+        /* thrusters (Bow/STT): o horímetro é o do VFD dele, lançado no Registro diário */
+        const ultimaLeitura = EQUIP_ITEM_MAP[equipId + '_vfd'] ? getUltimaLeitura(equipId + '_vfd') : getUltimaLeitura(equipId);
         if(ultimaLeitura) det.horimetro = ultimaLeitura.valor;
       }
       if(!det.oilServiceInput && det.horimetro) det.oilServiceInput = calcularHorasDesdeTrocaOleo(equipId, det.horimetro);
